@@ -46,7 +46,15 @@ The backend handles the API, database, and logic.
     - `python-multipart` (File uploads)
     - ...and others.
 
-5.  **Run the Backend Server:**
+5.  **Configure Environment Variables:**
+    - Copy the example environment file:
+        ```bash
+        cp .env.example .env
+        ```
+    - The default configuration uses **MySQL**. If you wish to use MySQL, proceed to the **Database Setup** section below.
+    - If you prefer **SQLite** (no installation required), edit `.env` and follow the instructions inside.
+
+6.  **Run the Backend Server:**
     ```bash
     python3 main.py
     ```
@@ -54,7 +62,51 @@ The backend handles the API, database, and logic.
 
 ---
 
-## 2. Frontend Setup
+## 2. Database Setup (MySQL)
+
+This project uses MySQL by default. Follow these steps to set it up locally:
+
+1.  **Install MySQL Server** (if not already installed):
+    - On Ubuntu/Debian:
+        ```bash
+        sudo apt update
+        sudo apt install mysql-server
+        ```
+    - On Windows: Download and install the [MySQL Installer](https://dev.mysql.com/downloads/installer/).
+
+2.  **Access MySQL Shell:**
+    ```bash
+    sudo mysql -u root -p
+    ```
+
+3.  **Create Database and User:**
+    Run the following SQL commands in the MySQL shell:
+    ```sql
+    -- Create the database
+    CREATE DATABASE attendance_db;
+
+    -- Create a dedicated user
+    CREATE USER 'attendance_user'@'localhost' IDENTIFIED BY 'attendance_pass';
+
+    -- Grant privileges
+    GRANT ALL PRIVILEGES ON attendance_db.* TO 'attendance_user'@'localhost';
+
+    -- Apply changes
+    FLUSH PRIVILEGES;
+
+    -- Exit
+    EXIT;
+    ```
+
+4.  **Verify Configuration:**
+    Ensure your `backend/.env` file has the correct `DATABASE_URL`:
+    ```
+    DATABASE_URL="mysql+pymysql://attendance_user:attendance_pass@localhost:3306/attendance_db"
+    ```
+
+---
+
+## 3. Frontend Setup
 
 The frontend provides the user interface.
 
@@ -83,7 +135,7 @@ The frontend provides the user interface.
 
 ---
 
-## 3. Using the Application
+## 4. Using the Application
 
 1.  Open your browser and navigate to `http://localhost:5173`.
 2.  **Admin Settings:** Go to the **Settings** page to configure:
