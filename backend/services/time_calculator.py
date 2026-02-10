@@ -97,6 +97,9 @@ class TimeCalculator:
         first_in = min(in_times) if in_times else None
         last_out = max(out_times) if out_times else None
         
+        if total_minutes > 0:
+            print(f"DEBUG time_calc: in_times={in_times}, out_times={out_times}, first_in={first_in}, last_out={last_out}, total_minutes={total_minutes}")
+        
         # Create IN/OUT pairs for display
         pairs = self._create_pairs(in_times, out_times)
         

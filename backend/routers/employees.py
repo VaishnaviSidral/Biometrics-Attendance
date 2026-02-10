@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from database import get_db
+from services.auth_utils import require_admin
 from models.employee import Employee
+from models.user import User
 from models.attendance import DailyAttendance, WeeklySummary
 
 router = APIRouter(prefix="/employees", tags=["employees"])
@@ -18,7 +20,8 @@ async def list_employees(
     search: Optional[str] = Query(None, description="Search by name or code"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     List all employees with optional search
@@ -52,7 +55,8 @@ async def list_employees(
 @router.get("/{employee_code}")
 async def get_employee(
     employee_code: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get single employee details
@@ -88,7 +92,8 @@ async def update_employee(
     employee_code: str,
     name: Optional[str] = None,
     department: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Update employee details

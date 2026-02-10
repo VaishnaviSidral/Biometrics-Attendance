@@ -7,10 +7,13 @@ from typing import List, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 import json
+import logging
 
 from models.employee import Employee
 from models.attendance import AttendanceLog, DailyAttendance, WeeklySummary, AttendanceStatus, ComplianceStatus
 from config import settings, get_status_color
+
+logger = logging.getLogger(__name__)
 
 
 class ReportGenerator:

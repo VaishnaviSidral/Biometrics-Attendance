@@ -1,14 +1,19 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import UploadData from './pages/UploadData';
 import AllEmployees from './pages/AllEmployees';
 import IndividualReport from './pages/IndividualReport';
 import Settings from './pages/Settings';
+import EmployeeDashboard from './pages/EmployeeDashboard';
 
 function Layout() {
-  const location = useLocation(); // Hook to listen to route changes
+  const location = useLocation();
+  const { isAuthenticated, isAdmin, isEmployee } = useAuth();
 
   const getCurrentPageTitle = () => {
     const path = location.pathname;
@@ -16,7 +21,8 @@ function Layout() {
       '/': 'Dashboard',
       '/upload': 'Upload Data',
       '/employees': 'All Employees',
-      '/settings': 'Settings'
+      '/settings': 'Settings',
+      '/employee-dashboard': 'My Attendance'
     };
 
     if (path.startsWith('/employee/')) {
@@ -26,17 +32,72 @@ function Layout() {
     return titles[path] || 'Dashboard';
   };
 
+  // Show sidebar only for admin users
+  const showSidebar = isAuthenticated && isAdmin;
+
   return (
     <div className="app-container">
-      <Sidebar />
-      <Header title={getCurrentPageTitle()} />
-      <main className="main-content">
+      {showSidebar && <Sidebar />}
+      {isAuthenticated && <Header title={getCurrentPageTitle()} />}
+      <main className={`main-content ${!showSidebar ? 'no-sidebar' : ''}`}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/upload" element={<UploadData />} />
-          <Route path="/employees" element={<AllEmployees />} />
-          <Route path="/employee/:code" element={<IndividualReport />} />
-          <Route path="/settings" element={<Settings />} />
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+
+          {/* Employee routes */}
+          <Route
+            path="/employee-dashboard"
+            element={
+              <ProtectedRoute>
+                <EmployeeDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin routes */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/upload"
+            element={
+              <ProtectedRoute requireAdmin>
+                <UploadData />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employees"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AllEmployees />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/:code"
+            element={
+              <ProtectedRoute requireAdmin>
+                <IndividualReport />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute requireAdmin>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </main>
     </div>
@@ -46,7 +107,9 @@ function Layout() {
 function App() {
   return (
     <BrowserRouter>
-      <Layout />
+      <AuthProvider>
+        <Layout />
+      </AuthProvider>
     </BrowserRouter>
   );
 }

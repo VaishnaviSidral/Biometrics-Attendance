@@ -8,8 +8,8 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings with defaults for hybrid work policy"""
     
-    # Database
-    DATABASE_URL: str = "sqlite:///./attendance.db"
+    # Database (MySQL)
+    DATABASE_URL: str = "mysql+pymysql://attendance_user:attendance_pass@localhost:3306/attendance_db"
     
     # Work Policy Configuration
     EXPECTED_HOURS_PER_DAY: int = 8  # Expected office hours per WFO day
@@ -28,6 +28,16 @@ class Settings(BaseSettings):
     # API Settings
     API_PREFIX: str = "/api"
     DEBUG: bool = True
+    
+    # Authentication Settings
+    SECRET_KEY: str = "your-secret-key-change-in-production-biometrics-2024"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    
+    # Default Credentials (change in production)
+    DEFAULT_ADMIN_USERNAME: str = "admin"
+    DEFAULT_ADMIN_PASSWORD: str = "admin123"
+    DEFAULT_EMPLOYEE_PASSWORD: str = "employee123"
     
     class Config:
         env_file = ".env"

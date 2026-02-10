@@ -2183,3 +2183,59 @@ Row 2178: Date parse failed for value 'None' (type: <class 'NoneType'>)
 Row 2179: Date parse failed for value 'None' (type: <class 'NoneType'>)
 Row 2180: Date parse failed for value 'None' (type: <class 'NoneType'>)
 Row 2181: Date parse failed for value 'None' (type: <class 'NoneType'>)
+Error processing upload: 'remark' is an invalid keyword argument for DailyAttendance
+Traceback (most recent call last):
+  File "/home/aishwarya/Documents/Biometrics Attendence/backend/routers/upload.py", line 144, in upload_attendance_file
+    daily = DailyAttendance(
+  File "<string>", line 4, in __init__
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 566, in _initialize_instance
+    with util.safe_reraise():
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/util/langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 564, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/decl_base.py", line 2142, in _declarative_constructor
+    raise TypeError(
+TypeError: 'remark' is an invalid keyword argument for DailyAttendance
+Error processing upload: 'remark' is an invalid keyword argument for DailyAttendance
+Traceback (most recent call last):
+  File "/home/aishwarya/Documents/Biometrics Attendence/backend/routers/upload.py", line 144, in upload_attendance_file
+    daily = DailyAttendance(
+  File "<string>", line 4, in __init__
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 566, in _initialize_instance
+    with util.safe_reraise():
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/util/langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 564, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/decl_base.py", line 2142, in _declarative_constructor
+    raise TypeError(
+TypeError: 'remark' is an invalid keyword argument for DailyAttendance
+Error processing upload: 'remark' is an invalid keyword argument for DailyAttendance
+Traceback (most recent call last):
+  File "/home/aishwarya/Documents/Biometrics Attendence/backend/routers/upload.py", line 144, in upload_attendance_file
+    daily = DailyAttendance(
+  File "<string>", line 4, in __init__
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 566, in _initialize_instance
+    with util.safe_reraise():
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/util/langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 564, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/decl_base.py", line 2142, in _declarative_constructor
+    raise TypeError(
+TypeError: 'remark' is an invalid keyword argument for DailyAttendance
+Error processing upload: 'remark' is an invalid keyword argument for DailyAttendance
+Traceback (most recent call last):
+  File "/home/aishwarya/Documents/Biometrics Attendence/backend/routers/upload.py", line 144, in upload_attendance_file
+    daily = DailyAttendance(
+  File "<string>", line 4, in __init__
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 566, in _initialize_instance
+    with util.safe_reraise():
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/util/langhelpers.py", line 146, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/state.py", line 564, in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+  File "/home/aishwarya/.local/lib/python3.10/site-packages/sqlalchemy/orm/decl_base.py", line 2142, in _declarative_constructor
+    raise TypeError(
+TypeError: 'remark' is an invalid keyword argument for DailyAttendance

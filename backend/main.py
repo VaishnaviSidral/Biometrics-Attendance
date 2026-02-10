@@ -8,7 +8,7 @@ import logging
 
 from config import settings
 from database import init_db
-from routers import upload, employees, reports, settings as settings_router
+from routers import upload, employees, reports, settings as settings_router, auth, employee_attendance
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +33,8 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router, prefix=settings.API_PREFIX)
+app.include_router(employee_attendance.router, prefix=settings.API_PREFIX)
 app.include_router(upload.router, prefix=settings.API_PREFIX)
 app.include_router(employees.router, prefix=settings.API_PREFIX)
 app.include_router(reports.router, prefix=settings.API_PREFIX)

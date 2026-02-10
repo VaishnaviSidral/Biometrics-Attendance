@@ -471,7 +471,9 @@ export default function Dashboard() {
                                                     </td>
                                                     <td style={{ padding: '12px' }}>{emp.hours}</td>
                                                     <td style={{ padding: '12px' }}>
-                                                        {emp.in_time} - {emp.out_time}
+                                                        {(emp.in_time && emp.out_time && emp.in_time !== '-' && emp.out_time !== '-')
+                                                            ? `${emp.in_time} - ${emp.out_time}`
+                                                            : '-'}
                                                     </td>
                                                 </tr>
                                             ))

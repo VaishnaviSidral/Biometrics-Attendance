@@ -4,6 +4,16 @@
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
+// Store auth token
+let authToken = null;
+
+/**
+ * Set authentication token
+ */
+function setAuthToken(token) {
+    authToken = token;
+}
+
 /**
  * Make API request with error handling
  */
@@ -15,6 +25,11 @@ async function request(endpoint, options = {}) {
             'Content-Type': 'application/json',
         },
     };
+
+    // Add authentication header if token exists
+    if (authToken) {
+        defaultOptions.headers['Authorization'] = `Bearer ${authToken}`;
+    }
 
     const config = {
         ...defaultOptions,
@@ -32,6 +47,16 @@ async function request(endpoint, options = {}) {
 
     try {
         const response = await fetch(url, config);
+
+        // Handle 401 Unauthorized
+        if (response.status === 401) {
+            // Clear auth and redirect to login
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_user');
+            authToken = null;
+            window.location.href = '/login';
+            throw new Error('Unauthorized');
+        }
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
@@ -55,6 +80,28 @@ async function request(endpoint, options = {}) {
  * API methods
  */
 export const api = {
+    // Set authentication token
+    setAuthToken,
+
+    // Authentication
+    login: async (username, password) => {
+        const response = await request('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+        return response;
+    },
+
+    logout: () => request('/auth/logout', { method: 'POST' }),
+
+    getCurrentUser: () => request('/auth/me'),
+
+    // Employee Attendance (for employees)
+    getEmployeeAttendance: (params = {}) => {
+        const searchParams = new URLSearchParams(params);
+        return request(`/employee/attendance?${searchParams}`);
+    },
+
     // Dashboard
     getDashboardSummary: () => request('/reports/dashboard'),
 

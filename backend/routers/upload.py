@@ -10,7 +10,9 @@ import logging
 from database import get_db
 from services.attendance_parser import AttendanceParser
 from services.time_calculator import TimeCalculator
+from services.auth_utils import require_admin
 from models.employee import Employee
+from models.user import User
 from models.attendance import AttendanceLog, DailyAttendance, WeeklySummary, AttendanceStatus, ComplianceStatus
 from config import settings
 
@@ -22,7 +24,8 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 @router.post("/")
 async def upload_attendance_file(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Upload and process biometric attendance file (CSV or Excel)
@@ -143,9 +146,9 @@ async def upload_attendance_file(
                         date=rec_date,
                         total_office_minutes=summary['total_office_minutes'],
                         status=status_enum,
-                        in_out_pairs=summary['in_out_pairs'],
-                        first_in=summary['first_in'],
-                        last_out=summary['last_out']
+                        in_out_pairs=summary.get('in_out_pairs'),
+                        first_in=summary.get('first_in'),
+                        last_out=summary.get('last_out')
                     )
                     db.add(daily)
                     daily_created += 1

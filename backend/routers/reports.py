@@ -12,6 +12,8 @@ import io
 
 from database import get_db
 from services.report_generator import ReportGenerator
+from services.auth_utils import require_admin
+from models.user import User
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -28,7 +30,8 @@ def parse_date(date_str: Optional[str]) -> Optional[date]:
 
 @router.get("/dashboard")
 async def get_dashboard_summary(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get dashboard summary statistics
@@ -40,7 +43,8 @@ async def get_dashboard_summary(
 @router.get("/dashboard-stats")
 async def get_dashboard_daily_stats(
     week_start: Optional[str] = Query(None, description="Week start date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get daily WFO/WFH stats for dashboard chart
@@ -54,7 +58,8 @@ async def get_dashboard_daily_stats(
 async def get_daily_details(
     date: str = Query(..., description="Date (YYYY-MM-DD)"),
     status: str = Query("WFO", description="Status category: WFO or WFH"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get details of employees for specific day and status
@@ -69,7 +74,8 @@ async def get_all_employees_report(
     sort_by: str = Query("name", description="Sort by: name, compliance, hours, status"),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
     status_filter: Optional[str] = Query(None, description="Filter by status: RED, AMBER, GREEN"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get report for all employees
@@ -93,7 +99,8 @@ async def get_individual_report(
     employee_code: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get detailed report for a single employee
@@ -115,7 +122,8 @@ async def get_individual_report(
 @router.get("/wfo-compliance")
 async def get_wfo_compliance_report(
     week_start: Optional[str] = Query(None, description="Week start date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get WFO compliance report
@@ -131,7 +139,8 @@ async def get_wfo_compliance_report(
 
 @router.get("/weeks")
 async def get_available_weeks(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Get list of available weeks
@@ -143,7 +152,8 @@ async def get_available_weeks(
 @router.get("/export/all-employees")
 async def export_all_employees_csv(
     week_start: Optional[str] = Query(None, description="Week start date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Export all employees report as CSV
@@ -189,7 +199,8 @@ async def export_all_employees_csv(
 @router.get("/export/wfo-compliance")
 async def export_wfo_compliance_csv(
     week_start: Optional[str] = Query(None, description="Week start date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Export WFO compliance report as CSV
@@ -237,7 +248,8 @@ async def export_individual_csv(
     employee_code: str,
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
 ):
     """
     Export individual employee report as CSV
@@ -309,3 +321,4 @@ async def export_individual_csv(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={employee_code}_report.csv"}
     )
+
