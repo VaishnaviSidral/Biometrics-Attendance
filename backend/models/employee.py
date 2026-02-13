@@ -18,8 +18,9 @@ class Employee(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(20), unique=True, nullable=False, index=True)
     name = Column(String(100), nullable=False)
+    email = Column(String(255), nullable=True, index=True)
     department = Column(String(50), nullable=True)
-    required_wfo_days = Column(Integer, default=2)
+    work_mode = Column(String(10), default='WFO')  # WFO / HYBRID / WFH
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -28,4 +29,4 @@ class Employee(Base):
     weekly_summaries = relationship("WeeklySummary", back_populates="employee")
     
     def __repr__(self):
-        return f"<Employee(code={self.code}, name={self.name})>"
+        return f"<Employee(code={self.code}, name={self.name}, work_mode={self.work_mode})>"

@@ -170,9 +170,15 @@ export default function FileUpload({ onUpload, isLoading }) {
                                     color: 'var(--color-text-secondary)'
                                 }}>
                                     <span>📊 Records: {uploadStatus.stats.records_parsed}</span>
-                                    <span>👥 Employees: {uploadStatus.stats.employees_created}</span>
+                                    <span>📝 Logs Created: {uploadStatus.stats.attendance_logs_created}</span>
+                                    <span>🔄 Duplicates Skipped: {uploadStatus.stats.attendance_logs_skipped_duplicates}</span>
                                     <span>📅 Daily Records: {uploadStatus.stats.daily_summaries_created}</span>
                                     <span>📈 Weekly Summaries: {uploadStatus.stats.weekly_summaries_created}</span>
+                                    {uploadStatus.stats.employees_skipped_not_in_db > 0 && (
+                                        <span style={{ color: 'var(--color-status-amber)' }}>
+                                            ⚠️ Employees Not Found: {uploadStatus.stats.employees_skipped_not_in_db}
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </div>

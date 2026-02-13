@@ -1,32 +1,97 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../api/client';
 
-export default function Login() {
-    const [username, setUsername] = useState('');
+function LoginForm() {
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const [googleClientId, setGoogleClientId] = useState('');
+    const [googleEnabled, setGoogleEnabled] = useState(false);
+    const { login, googleLogin } = useAuth();
     const navigate = useNavigate();
+    const googleButtonRef = useRef(null);
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    useEffect(() => {
+        // Fetch auth config to get Google Client ID
+        fetchAuthConfig();
+    }, []);
 
+    const handleRedirect = useCallback((user) => {
+        if (user.role === 'ADMIN') {
+            navigate('/');
+        } else if (user.role === 'EMPLOYEE') {
+            navigate('/employee-dashboard');
+        }
+    }, [navigate]);
+
+    const handleGoogleSuccess = useCallback(async (credentialResponse) => {
         setError('');
         setLoading(true);
 
         try {
-            const user = await login(username, password);
+            const user = await googleLogin(credentialResponse.credential);
+            handleRedirect(user);
+        } catch (err) {
+            setError(err.message || 'Google login failed.');
+        } finally {
+            setLoading(false);
+        }
+    }, [googleLogin, handleRedirect]);
 
-            // Redirect based on role
-            if (user.role === 'ADMIN') {
-                navigate('/');
-            } else if (user.role === 'EMPLOYEE') {
-                navigate('/employee-dashboard');
+    // Initialize Google Sign-In when client ID is available
+    useEffect(() => {
+        if (!googleEnabled || !googleClientId || !googleButtonRef.current) return;
+
+        const initializeGoogleSignIn = () => {
+            if (typeof window.google === 'undefined' || !window.google.accounts) {
+                // GIS script not loaded yet, retry after a short delay
+                setTimeout(initializeGoogleSignIn, 100);
+                return;
+            }
+
+            window.google.accounts.id.initialize({
+                client_id: googleClientId,
+                callback: handleGoogleSuccess,
+            });
+
+            window.google.accounts.id.renderButton(googleButtonRef.current, {
+                theme: 'filled_blue',
+                size: 'large',
+                text: 'signin_with',
+                shape: 'rectangular',
+                width: googleButtonRef.current.offsetWidth || 300,
+            });
+        };
+
+        initializeGoogleSignIn();
+    }, [googleEnabled, googleClientId, handleGoogleSuccess]);
+
+    const fetchAuthConfig = async () => {
+        try {
+            const config = await api.getAuthConfig();
+            console.log("AUTH CONFIG:", config);
+            if (config.google_client_id) {
+                setGoogleClientId(config.google_client_id);
+                setGoogleEnabled(config.google_enabled);
             }
         } catch (err) {
-            setError(err.message || 'Invalid username or password');
+            console.log('Auth config not available:', err.message);
+        }
+    };
+
+    const handleEmailLogin = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const user = await login(email, password);
+            handleRedirect(user);
+        } catch (err) {
+            setError(err.message || 'Login failed. Please check your email.');
         } finally {
             setLoading(false);
         }
@@ -56,24 +121,25 @@ export default function Login() {
                     <p className="login-subtitle">Biometric Attendance System</p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="login-form">
-                    {error && (
-                        <div className="login-error">
-                            {error}
-                        </div>
-                    )}
+                {error && (
+                    <div className="login-error" style={{ margin: '0 0 16px 0' }}>
+                        {error}
+                    </div>
+                )}
 
+                {/* Email Login Form */}
+                <form onSubmit={handleEmailLogin} className="login-form">
                     <div className="form-group">
-                        <label htmlFor="username" className="form-label">
-                            Username
+                        <label htmlFor="email" className="form-label">
+                            Email
                         </label>
                         <input
-                            id="username"
-                            type="text"
+                            id="email"
+                            type="email"
                             className="form-input"
-                            placeholder="Enter your username"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="Enter your organization email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             required
                             autoFocus
                         />
@@ -87,10 +153,9 @@ export default function Login() {
                             id="password"
                             type="password"
                             className="form-input"
-                            placeholder="Enter your password"
+                            placeholder="Enter any password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            required
                         />
                     </div>
 
@@ -102,19 +167,33 @@ export default function Login() {
                         {loading ? 'Signing in...' : 'Sign In'}
                     </button>
 
-                    <div className="login-help">
-                        <p className="text-muted">
-                            Default credentials:
-                        </p>
-                        <p className="text-muted">
-                            <strong>Admin:</strong> admin / admin123
-                        </p>
-                        <p className="text-muted">
-                            <strong>Employee:</strong> employee_code / employee123
-                        </p>
+                    <div style={{ marginBottom: '20px' }}>
+
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            margin: '20px 0',
+                            gap: '12px'
+                        }}>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
+                            <span className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
+                                or sign in with email
+                            </span>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
+                        </div>
                     </div>
                 </form>
+                {/* Google Sign-In */}
+                {googleEnabled && (
+                    <div style={{ marginBottom: '20px' }}>
+                        <div ref={googleButtonRef} style={{ width: '100%' }} />
+                    </div>
+                )}
             </div>
         </div>
     );
+}
+
+export default function Login() {
+    return <LoginForm />;
 }

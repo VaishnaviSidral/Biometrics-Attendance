@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Download, Filter, Search } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
@@ -17,9 +17,12 @@ export default function AllEmployees() {
     const [sortBy, setSortBy] = useState('name');
     const [sortOrder, setSortOrder] = useState('asc');
 
+    // Work mode tab: '' = All, 'WFO', 'HYBRID', 'WFH'
+    const [workModeTab, setWorkModeTab] = useState('');
+
     useEffect(() => {
         fetchData();
-    }, [selectedWeek, sortBy, sortOrder]); // Status filter NOT included - handled on frontend
+    }, [selectedWeek, sortBy, sortOrder]);
 
     const fetchData = async () => {
         try {
@@ -30,7 +33,6 @@ export default function AllEmployees() {
             };
 
             if (selectedWeek) params.week_start = selectedWeek;
-            // Note: status_filter NOT sent to API - filtering done on frontend
 
             const data = await api.getAllEmployeesReport(params);
             setEmployees(data.employees || []);
@@ -50,6 +52,7 @@ export default function AllEmployees() {
         }
     };
 
+    // Filter employees based on search, status, and work mode tab
     const filteredEmployees = employees.filter(emp => {
         // Search filter
         if (searchTerm) {
@@ -61,16 +64,18 @@ export default function AllEmployees() {
             if (!matchesSearch) return false;
         }
 
+        // Work mode tab filter
+        if (workModeTab) {
+            if ((emp.work_mode || 'WFO') !== workModeTab) return false;
+        }
+
         // Status filter
         if (statusFilter) {
             if (statusFilter === 'compliant') {
-                // Compliant = GREEN or AMBER (not RED)
                 return emp.status !== 'RED';
             } else if (statusFilter === 'RED') {
-                // Non-compliant = RED only
                 return emp.status === 'RED';
             } else {
-                // Other status filters (GREEN, AMBER)
                 return emp.status === statusFilter;
             }
         }
@@ -78,7 +83,119 @@ export default function AllEmployees() {
         return true;
     });
 
-    const columns = [
+    // Work mode counts
+    const wfoCount = employees.filter(e => (e.work_mode || 'WFO') === 'WFO').length;
+    const hybridCount = employees.filter(e => (e.work_mode || 'WFO') === 'HYBRID').length;
+    const wfhCount = employees.filter(e => (e.work_mode || 'WFO') === 'WFH').length;
+
+    // Columns change based on work mode tab
+    const getColumns = () => {
+        const baseColumns = [
+            {
+                key: 'employee_name',
+                label: 'Employee',
+                sortable: true,
+                render: (value, row) => (
+                    <div className="cell-employee">
+                        <div className="employee-avatar">
+                            {value?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="employee-info">
+                            <span className="employee-name">{value}</span>
+                            <span className="employee-code">ID: {row.employee_code}</span>
+                        </div>
+                    </div>
+                )
+            }
+        ];
+
+        if (workModeTab === 'WFH') {
+            // WFH: Employee, Total hours, Compliance (100%), Status
+            return [
+                ...baseColumns,
+                {
+                    key: 'total_office_hours',
+                    label: 'Total Hours',
+                    sortable: true
+                },
+                {
+                    key: 'compliance_percentage',
+                    label: 'Compliance',
+                    sortable: true,
+                    render: () => (
+                        <div className="flex items-center gap-3">
+                            <div className="progress-bar" style={{ width: '80px' }}>
+                                <div
+                                    className="progress-fill green"
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            <span className="font-medium">100.0%</span>
+                        </div>
+                    )
+                },
+                {
+                    key: 'status',
+                    label: 'Status',
+                    sortable: true,
+                    render: () => <StatusBadge status="GREEN" />
+                }
+            ];
+        }
+
+        // WFO and Hybrid tabs
+        const requiredDays = workModeTab === 'HYBRID' ? 3 : 5;
+
+        return [
+            ...baseColumns,
+            {
+                key: 'total_office_hours',
+                label: 'Total Hours',
+                sortable: true
+            },
+            {
+                key: 'wfo_days',
+                label: 'Days',
+                sortable: true,
+                render: (value, row) => (
+                    <span>
+                        <span className="font-medium">{value}</span>
+                        <span className="text-muted"> / {row.required_wfo_days || requiredDays}</span>
+                    </span>
+                )
+            },
+            {
+                key: 'expected_hours',
+                label: 'Expected Hours',
+                sortable: false
+            },
+            {
+                key: 'compliance_percentage',
+                label: 'Compliance',
+                sortable: true,
+                render: (value, row) => (
+                    <div className="flex items-center gap-3">
+                        <div className="progress-bar" style={{ width: '80px' }}>
+                            <div
+                                className={`progress-fill ${row.status?.toLowerCase()}`}
+                                style={{ width: `${Math.min(value, 100)}%` }}
+                            />
+                        </div>
+                        <span className="font-medium">{value?.toFixed(1)}%</span>
+                    </div>
+                )
+            },
+            {
+                key: 'status',
+                label: 'Status',
+                sortable: true,
+                render: (value) => <StatusBadge status={value} />
+            }
+        ];
+    };
+
+    // Default columns (All tab) includes work_mode column
+    const allColumns = [
         {
             key: 'employee_name',
             label: 'Employee',
@@ -96,10 +213,24 @@ export default function AllEmployees() {
             )
         },
         {
-            key: 'department',
-            label: 'Department',
+            key: 'work_mode',
+            label: 'Mode',
             sortable: true,
-            render: (value) => value || '-'
+            render: (value) => {
+                const colors = { WFO: '#3b82f6', HYBRID: '#8b5cf6', WFH: '#06b6d4' };
+                return (
+                    <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '4px',
+                        fontSize: 'var(--font-size-xs)',
+                        fontWeight: 600,
+                        background: `${colors[value] || colors.WFO}20`,
+                        color: colors[value] || colors.WFO
+                    }}>
+                        {value || 'WFO'}
+                    </span>
+                );
+            }
         },
         {
             key: 'total_office_hours',
@@ -108,7 +239,7 @@ export default function AllEmployees() {
         },
         {
             key: 'wfo_days',
-            label: 'WFO Days',
+            label: 'Days',
             sortable: true,
             render: (value, row) => (
                 <span>
@@ -146,6 +277,8 @@ export default function AllEmployees() {
         }
     ];
 
+    const columns = workModeTab ? getColumns() : allColumns;
+
     return (
         <div className="animate-fade-in">
             {/* Page Header */}
@@ -164,7 +297,7 @@ export default function AllEmployees() {
                     gap: 'var(--spacing-4)',
                     alignItems: 'end'
                 }}>
-                    {/* Search by Name */}
+                    {/* Search */}
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Name</label>
                         <div style={{ position: 'relative' }}>
@@ -216,22 +349,21 @@ export default function AllEmployees() {
                             onChange={(e) => setStatusFilter(e.target.value)}
                         >
                             <option value="">All Status</option>
-                            <option value="GREEN">Excellent (&gt;90%)</option>
-                            <option value="AMBER">Meets Target (70-90%)</option>
-                            <option value="RED">Below Target (&lt;70%)</option>
+                            <option value="GREEN">Compliance (&ge;90%)</option>
+                            <option value="AMBER">Mid-Compliance (60-89%)</option>
+                            <option value="RED">Non-Compliance (&lt;60%)</option>
                         </select>
                     </div>
                 </div>
             </div>
 
-            {/* Rich Stats Summary */}
+            {/* Stats Summary */}
             <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
                 gap: 'var(--spacing-4)',
                 marginBottom: 'var(--spacing-6)'
             }}>
-                {/* Employees Present This Week - Fixed, not filtered */}
                 <div
                     className="card"
                     style={{ textAlign: 'center', padding: 'var(--spacing-4)', cursor: 'pointer' }}
@@ -240,10 +372,9 @@ export default function AllEmployees() {
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold' }}>
                         {employees.length}
                     </div>
-                    <div className="text-muted">Employees Present This Week</div>
+                    <div className="text-muted">Total Employees</div>
                 </div>
 
-                {/* Avg Compliance - Based on filtered data */}
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-primary)' }}>
                         {(filteredEmployees.reduce((acc, emp) => acc + emp.compliance_percentage, 0) / (filteredEmployees.length || 1)).toFixed(1)}%
@@ -251,23 +382,50 @@ export default function AllEmployees() {
                     <div className="text-muted">Avg Compliance</div>
                 </div>
 
-                {/* Compliant (>70%) - Based on filtered data */}
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-green-bg)', borderColor: 'var(--color-status-green-border)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-green)' }}>
-                        {filteredEmployees.filter(e => e.status !== 'RED').length}
+                        {filteredEmployees.filter(e => e.compliance_percentage >= 90).length}
                     </div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliant (&gt;70%)</div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: '4px' }}>Meets Target &amp; Excellent</div>
+                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliance (&ge;90%)</div>
                 </div>
 
-                {/* Non-Compliant (<70%) - Based on filtered data */}
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-red-bg)', borderColor: 'var(--color-status-red-border)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-red)' }}>
-                        {filteredEmployees.filter(e => e.status === 'RED').length}
+                        {filteredEmployees.filter(e => e.compliance_percentage < 60).length}
                     </div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Non-Compliant (&lt;70%)</div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: '4px' }}>Below Target</div>
+                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Non-Compliance (&lt;60%)</div>
                 </div>
+            </div>
+
+            {/* Work Mode Tabs */}
+            <div className="tabs" style={{ marginBottom: 'var(--spacing-4)' }}>
+                <button
+                    className={`tab ${workModeTab === '' ? 'active' : ''}`}
+                    onClick={() => setWorkModeTab('')}
+                >
+                    All ({employees.length})
+                </button>
+                <button
+                    className={`tab ${workModeTab === 'WFO' ? 'active' : ''}`}
+                    onClick={() => setWorkModeTab('WFO')}
+                    style={workModeTab === 'WFO' ? { borderColor: '#3b82f6', color: '#3b82f6' } : {}}
+                >
+                    WFO ({wfoCount})
+                </button>
+                <button
+                    className={`tab ${workModeTab === 'HYBRID' ? 'active' : ''}`}
+                    onClick={() => setWorkModeTab('HYBRID')}
+                    style={workModeTab === 'HYBRID' ? { borderColor: '#8b5cf6', color: '#8b5cf6' } : {}}
+                >
+                    Hybrid ({hybridCount})
+                </button>
+                <button
+                    className={`tab ${workModeTab === 'WFH' ? 'active' : ''}`}
+                    onClick={() => setWorkModeTab('WFH')}
+                    style={workModeTab === 'WFH' ? { borderColor: '#06b6d4', color: '#06b6d4' } : {}}
+                >
+                    WFH ({wfhCount})
+                </button>
             </div>
 
             {/* Data Table */}
@@ -275,6 +433,7 @@ export default function AllEmployees() {
                 <div className="table-header">
                     <h3 className="table-title">
                         {filteredEmployees.length} Employee{filteredEmployees.length !== 1 ? 's' : ''}
+                        {workModeTab && ` (${workModeTab})`}
                     </h3>
                     <button className="btn btn-primary" onClick={handleExport}>
                         <Download size={18} />

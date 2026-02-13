@@ -24,7 +24,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }) {
                     You do not have permission to access this page.
                 </p>
                 <p className="text-muted">
-                    Logged in as: {user?.username} ({user?.role})
+                    Logged in as: {user?.email || user?.name} ({user?.role})
                 </p>
             </div>
         );

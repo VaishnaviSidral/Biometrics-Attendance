@@ -4,15 +4,15 @@ Handles file upload and data processing
 """
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import List
 import logging
 
 from database import get_db
 from services.attendance_parser import AttendanceParser
-from services.time_calculator import TimeCalculator
-from services.auth_utils import require_admin
+from services.time_calculator import TimeCalculator, build_work_mode_config
+from services.auth_utils import require_admin, CurrentUser
 from models.employee import Employee
-from models.user import User
 from models.attendance import AttendanceLog, DailyAttendance, WeeklySummary, AttendanceStatus, ComplianceStatus
 from config import settings
 
@@ -25,33 +25,23 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 async def upload_attendance_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: CurrentUser = Depends(require_admin)
 ):
     """
     Upload and process biometric attendance file (CSV or Excel)
-    
-    This endpoint:
-    1. Parses the uploaded file
-    2. Extracts and stores employees
-    3. Stores raw attendance logs
-    4. Calculates daily summaries
-    5. Calculates weekly summaries
     """
-    # Validate file type
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
-    
+
     if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Invalid file format. Please upload a CSV or Excel file."
         )
-    
+
     try:
-        # Read file content
         content = await file.read()
-        
-        # Parse file
+
         parser = AttendanceParser()
         try:
             df, records = parser.parse_file(content, file.filename)
@@ -60,37 +50,59 @@ async def upload_attendance_file(
         except Exception as e:
             logger.exception("Error parsing file")
             raise HTTPException(status_code=400, detail=f"Could not parse file. Please check the format.")
-        
+
         if not records:
             error_msg = "No valid records found in the file."
             if parser.warnings:
                 error_msg += f" Warnings: {'; '.join(parser.warnings[:3])}"
+            raise HTTPException(status_code=400, detail=error_msg)
+
+        # Validate employees exist in DB (employees must be imported separately)
+        unique_employees = parser.get_unique_employees(records)
+        existing_employees = {
+            emp.code for emp in db.query(Employee.code).all()
+        }
+
+        # Find employees in file that are NOT in the DB
+        unknown_codes = set()
+        for emp in unique_employees:
+            if emp['code'] not in existing_employees:
+                unknown_codes.add(emp['code'])
+
+        # Filter out records for unknown employees and warn
+        if unknown_codes:
+            records = [r for r in records if r['code'] not in unknown_codes]
+            for code in sorted(unknown_codes):
+                parser.warnings.append(
+                    f"Employee '{code}' not found in employees table — their attendance records were skipped. "
+                    f"Please import this employee first."
+                )
+
+        if not records:
             raise HTTPException(
                 status_code=400,
-                detail=error_msg
+                detail="No records to process. All employees in the file are missing from the employees table. "
+                       "Please import employees first, then upload attendance data."
             )
-        
-        # Extract and store employees
-        employees = parser.get_unique_employees(records)
-        employees_created = 0
-        
-        for emp in employees:
-            existing = db.query(Employee).filter(Employee.code == emp['code']).first()
-            if not existing:
-                new_emp = Employee(
-                    code=emp['code'],
-                    name=emp['name'] or f"Employee {emp['code']}"
-                )
-                db.add(new_emp)
-                employees_created += 1
-            elif emp['name'] and not existing.name:
-                existing.name = emp['name']
-        
-        db.commit()
-        
-        # Store raw attendance logs
+
+        # Store raw attendance logs WITH deduplication
         logs_created = 0
+        logs_skipped = 0
         for record in records:
+            # Check if this exact log already exists
+            existing_log = db.query(AttendanceLog).filter(
+                and_(
+                    AttendanceLog.employee_code == record['code'],
+                    AttendanceLog.date == record['date'],
+                    AttendanceLog.in_time == record['in_time'],
+                    AttendanceLog.out_time == record['out_time']
+                )
+            ).first()
+
+            if existing_log:
+                logs_skipped += 1
+                continue
+
             log = AttendanceLog(
                 employee_code=record['code'],
                 date=record['date'],
@@ -104,43 +116,41 @@ async def upload_attendance_file(
             )
             db.add(log)
             logs_created += 1
-        
+
         db.commit()
-        
-        # Calculate daily summaries with dynamic settings from database
+
+        # Get dynamic settings from DB
         from routers.settings import get_dynamic_settings
         dynamic_settings = get_dynamic_settings(db)
-        
+
         calculator = TimeCalculator(
             expected_hours_per_day=dynamic_settings['expected_hours_per_day'],
             wfo_days_per_week=dynamic_settings['wfo_days_per_week'],
-            min_hours_for_present=dynamic_settings['min_hours_for_present'],
+            hybrid_days_per_week=dynamic_settings['hybrid_days_per_week'],
             threshold_red=dynamic_settings['threshold_red'],
             threshold_amber=dynamic_settings['threshold_amber']
         )
-        
+
+        # Calculate daily summaries from current file and upsert
         daily_summaries = calculator.calculate_daily_summary(records)
         daily_created = 0
-        
+
         for emp_code, date_summaries in daily_summaries.items():
             for rec_date, summary in date_summaries.items():
-                # Check if already exists
                 existing = db.query(DailyAttendance).filter(
                     DailyAttendance.employee_code == emp_code,
                     DailyAttendance.date == rec_date
                 ).first()
-                
+
                 status_enum = AttendanceStatus[summary['status']]
-                
+
                 if existing:
-                    # Update existing
                     existing.total_office_minutes = summary['total_office_minutes']
                     existing.status = status_enum
                     existing.in_out_pairs = summary['in_out_pairs']
                     existing.first_in = summary['first_in']
                     existing.last_out = summary['last_out']
                 else:
-                    # Create new
                     daily = DailyAttendance(
                         employee_code=emp_code,
                         date=rec_date,
@@ -152,40 +162,68 @@ async def upload_attendance_file(
                     )
                     db.add(daily)
                     daily_created += 1
-        
+
         db.commit()
-        
-        # Calculate weekly summaries
+
+        # Calculate weekly summaries by aggregating from ALL daily_attendance
+        # records in the DB (not just current file), so partial week uploads
+        # accumulate correctly.
         all_dates = [record['date'] for record in records]
         weeks = calculator.get_all_weeks(all_dates)
         weekly_created = 0
-        
-        # Fetch employee requirements for calculation
+
+        # Fetch employee work modes
         all_employees = db.query(Employee).all()
-        employee_requirements = {emp.code: emp.required_wfo_days for emp in all_employees}
-        
+        employee_work_modes = {emp.code: (emp.work_mode or 'WFO') for emp in all_employees}
+
+        # Build dynamic work mode config from settings
+        work_mode_config = build_work_mode_config(
+            expected_hours_per_day=dynamic_settings['expected_hours_per_day'],
+            wfo_days_per_week=dynamic_settings['wfo_days_per_week'],
+            hybrid_days_per_week=dynamic_settings['hybrid_days_per_week']
+        )
+
         for week_start, week_end in weeks:
+            # Query ALL daily_attendance records for this week from DB
+            # for ALL employees (not just ones in the current file)
+            db_daily_records = db.query(DailyAttendance).filter(
+                and_(
+                    DailyAttendance.date >= week_start,
+                    DailyAttendance.date <= week_end
+                )
+            ).all()
+
+            # Build daily_summaries dict from DB records
+            db_daily_summaries = {}
+            for rec in db_daily_records:
+                if rec.employee_code not in db_daily_summaries:
+                    db_daily_summaries[rec.employee_code] = {}
+                db_daily_summaries[rec.employee_code][rec.date] = {
+                    'total_office_minutes': rec.total_office_minutes,
+                    'status': rec.status.value  # e.g. "PRESENT", "ABSENT"
+                }
+
+            # Calculate weekly summary from complete DB data
             weekly_data = calculator.calculate_weekly_summary(
-                daily_summaries, week_start, week_end, employee_requirements
+                db_daily_summaries, week_start, week_end,
+                employee_work_modes, work_mode_config
             )
-            
+
             for emp_code, week_summary in weekly_data.items():
                 existing = db.query(WeeklySummary).filter(
                     WeeklySummary.employee_code == emp_code,
                     WeeklySummary.week_start == week_start
                 ).first()
-                
+
                 status_enum = ComplianceStatus[week_summary['status']]
-                
+
                 if existing:
-                    # Update existing
                     existing.total_office_minutes = week_summary['total_office_minutes']
                     existing.wfo_days = week_summary['wfo_days']
                     existing.expected_minutes = week_summary['expected_minutes']
                     existing.compliance_percentage = week_summary['compliance_percentage']
                     existing.status = status_enum
                 else:
-                    # Create new
                     weekly = WeeklySummary(
                         employee_code=emp_code,
                         week_start=week_start,
@@ -198,23 +236,24 @@ async def upload_attendance_file(
                     )
                     db.add(weekly)
                     weekly_created += 1
-        
+
         db.commit()
-        
+
         return {
             "success": True,
             "message": "File processed successfully",
             "stats": {
                 "records_parsed": len(records),
-                "employees_created": employees_created,
+                "employees_skipped_not_in_db": len(unknown_codes),
                 "attendance_logs_created": logs_created,
+                "attendance_logs_skipped_duplicates": logs_skipped,
                 "daily_summaries_created": daily_created,
                 "weekly_summaries_created": weekly_created
             },
             "warnings": parser.warnings[:10] if parser.warnings else [],
             "errors": parser.errors[:10] if parser.errors else []
         }
-    
+
     except HTTPException:
         raise
     except ValueError as e:

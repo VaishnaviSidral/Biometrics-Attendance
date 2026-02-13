@@ -66,8 +66,8 @@ export default function EmployeeDashboard() {
             {/* Header */}
             <div className="employee-dashboard-header">
                 <div>
-                    <h1 className="page-title">Welcome, {data?.employee_name || user?.username}</h1>
-                    <p className="page-subtitle">Employee ID: {data?.employee_code || user?.employee_code}</p>
+                    <h1 className="page-title">Welcome, {data?.employee_name || user?.name || user?.email}</h1>
+                    <p className="page-subtitle">Employee ID: {data?.employee_code || user?.employee_code || 'N/A'}</p>
                 </div>
             </div>
 

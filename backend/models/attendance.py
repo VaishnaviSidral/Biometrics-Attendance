@@ -87,7 +87,7 @@ class WeeklySummary(Base):
     week_end = Column(Date, nullable=False)
     total_office_minutes = Column(Integer, default=0)
     wfo_days = Column(Integer, default=0)
-    expected_minutes = Column(Integer, default=960)  # 2 days * 8 hours * 60 mins
+    expected_minutes = Column(Integer, default=2700)  # WFO: 5 days * 9 hours * 60 mins = 2700
     compliance_percentage = Column(Float, default=0.0)
     status = Column(Enum(ComplianceStatus), nullable=False, default=ComplianceStatus.RED)
     created_at = Column(DateTime, default=datetime.utcnow)

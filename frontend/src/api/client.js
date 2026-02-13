@@ -50,7 +50,6 @@ async function request(endpoint, options = {}) {
 
         // Handle 401 Unauthorized
         if (response.status === 401) {
-            // Clear auth and redirect to login
             localStorage.removeItem('auth_token');
             localStorage.removeItem('auth_user');
             authToken = null;
@@ -84,10 +83,24 @@ export const api = {
     setAuthToken,
 
     // Authentication
-    login: async (username, password) => {
+
+    // Get auth config (Google Client ID etc.)
+    getAuthConfig: () => request('/auth/config'),
+
+    // Google OAuth login
+    googleLogin: async (credential) => {
+        const response = await request('/auth/google', {
+            method: 'POST',
+            body: JSON.stringify({ credential })
+        });
+        return response;
+    },
+
+    // Email login (password not validated per README)
+    login: async (email, password) => {
         const response = await request('/auth/login', {
             method: 'POST',
-            body: JSON.stringify({ username, password })
+            body: JSON.stringify({ email, password })
         });
         return response;
     },

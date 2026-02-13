@@ -22,21 +22,33 @@ export const AuthProvider = ({ children }) => {
         const storedUser = localStorage.getItem('auth_user');
 
         if (storedToken && storedUser) {
-            setToken(storedToken);
-            setUser(JSON.parse(storedUser));
-            api.setAuthToken(storedToken);
+            try {
+                const parsedUser = JSON.parse(storedUser);
+                if (parsedUser && typeof parsedUser === 'object') {
+                    setToken(storedToken);
+                    setUser(parsedUser);
+                    api.setAuthToken(storedToken);
+                } else {
+                    localStorage.removeItem('auth_token');
+                    localStorage.removeItem('auth_user');
+                }
+            } catch (error) {
+                console.error('Error parsing stored user data:', error);
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('auth_user');
+            }
         }
 
         setLoading(false);
     }, []);
 
-    const login = async (username, password) => {
+    // Email login (password can be anything - per README)
+    const login = async (email, password) => {
         try {
-            const response = await api.login(username, password);
+            const response = await api.login(email, password);
 
             const { access_token, user: userData } = response;
 
-            // Store token and user info
             localStorage.setItem('auth_token', access_token);
             localStorage.setItem('auth_user', JSON.stringify(userData));
 
@@ -51,8 +63,28 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Google OAuth login
+    const googleLogin = async (credential) => {
+        try {
+            const response = await api.googleLogin(credential);
+
+            const { access_token, user: userData } = response;
+
+            localStorage.setItem('auth_token', access_token);
+            localStorage.setItem('auth_user', JSON.stringify(userData));
+
+            setToken(access_token);
+            setUser(userData);
+            api.setAuthToken(access_token);
+
+            return userData;
+        } catch (error) {
+            console.error('Google login error:', error);
+            throw error;
+        }
+    };
+
     const logout = () => {
-        // Clear stored data
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
 
@@ -65,6 +97,7 @@ export const AuthProvider = ({ children }) => {
         user,
         token,
         login,
+        googleLogin,
         logout,
         loading,
         isAuthenticated: !!token,

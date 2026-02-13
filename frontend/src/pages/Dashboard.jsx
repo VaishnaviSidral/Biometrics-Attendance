@@ -269,7 +269,7 @@ export default function Dashboard() {
                     description="Overall adherence to WFO policy."
                     status={
                         (summary?.avg_compliance || 0) >= 90 ? 'green' :
-                            (summary?.avg_compliance || 0) >= 70 ? 'amber' : 'red'
+                            (summary?.avg_compliance || 0) >= 60 ? 'amber' : 'red'
                     }
                 />
                 <SummaryCard
@@ -283,7 +283,7 @@ export default function Dashboard() {
                     icon={AlertTriangle}
                     value={summary?.alerts || 0}
                     label="Employees Below Target"
-                    description="Employees with < 70% compliance."
+                    description="Employees with < 60% compliance (Non-Compliance)."
                     status="red"
                     onClick={() => {
                         const belowTarget = employees.filter(emp =>

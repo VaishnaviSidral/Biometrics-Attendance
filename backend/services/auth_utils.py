@@ -1,10 +1,10 @@
 """
-Authentication utilities for JWT token handling and password management
+Authentication utilities for JWT token handling
+No passwords - auth via Google OAuth + Redmine DB validation
 """
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -15,12 +15,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import settings
-from database import get_db
-from models.user import User, UserRole
+from database import get_db, validate_user_in_redmine
+from models.admin import Admin
+from models.employee import Employee
 
+import logging
+logger = logging.getLogger(__name__)
 
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTP Bearer token security
 security = HTTPBearer()
@@ -28,24 +29,80 @@ security = HTTPBearer()
 
 class TokenData(BaseModel):
     """Token data model"""
-    username: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
 
 
 class UserResponse(BaseModel):
     """User response model"""
-    username: str
+    email: str
+    name: str
     role: str
     employee_code: Optional[str] = None
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against its hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+class CurrentUser(BaseModel):
+    """Current authenticated user"""
+    email: str
+    name: str
+    role: str  # "ADMIN" or "EMPLOYEE"
+    employee_code: Optional[str] = None
 
 
-def get_password_hash(password: str) -> str:
-    """Generate password hash"""
-    return pwd_context.hash(password)
+def verify_google_token(token: str) -> dict | None:
+    """
+    Verify Google OAuth ID token.
+    Returns user info dict or None if invalid.
+    """
+    print("TOKEN RECEIVED:", token[:30])
+    print("CLIENT ID USED:", settings.GOOGLE_CLIENT_ID)
+    if not settings.GOOGLE_CLIENT_ID:
+        logger.warning("GOOGLE_CLIENT_ID not configured")
+        return None
+
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID
+        )
+
+        return {
+            "email": idinfo.get("email"),
+            "name": idinfo.get("name", ""),
+            "picture": idinfo.get("picture", "")
+        }
+    except Exception as e:
+        logger.error(f"Google token verification failed: {e}")
+        return None
+
+
+def get_user_role(email: str, db: Session) -> tuple[str, Optional[str]]:
+    """
+    Determine user role from biometric DB admins table.
+    Returns (role, employee_code)
+    
+    Per README:
+      If email in admins table → role = ADMIN
+      Else → role = EMPLOYEE
+    """
+    # Check admins table
+    admin = db.query(Admin).filter(
+        Admin.email == email,
+        Admin.is_admin == True
+    ).first()
+
+    if admin:
+        return "ADMIN", None
+
+    # For employees, try to find their employee code
+    employee = db.query(Employee).filter(Employee.email == email).first()
+    employee_code = employee.code if employee else None
+
+    return "EMPLOYEE", employee_code
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -55,61 +112,56 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
+
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 
-def decode_access_token(token: str) -> Optional[TokenData]:
+def decode_access_token(token: str) -> Optional[dict]:
     """Decode and verify JWT access token"""
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            return None
-        return TokenData(username=username)
+        return payload
     except JWTError:
         return None
 
 
-def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
-    """Authenticate user with username and password"""
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        return None
-    if not verify_password(password, user.password_hash):
-        return None
-    return user
-
-
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-) -> User:
+) -> CurrentUser:
     """Get current authenticated user from JWT token"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     token = credentials.credentials
-    token_data = decode_access_token(token)
-    
-    if token_data is None or token_data.username is None:
+    payload = decode_access_token(token)
+
+    if payload is None:
         raise credentials_exception
-    
-    user = db.query(User).filter(User.username == token_data.username).first()
-    if user is None:
+
+    email = payload.get("sub")
+    role = payload.get("role")
+    name = payload.get("name", "")
+    employee_code = payload.get("employee_code")
+
+    if not email or not role:
         raise credentials_exception
-    
-    return user
+
+    return CurrentUser(
+        email=email,
+        name=name,
+        role=role,
+        employee_code=employee_code
+    )
 
 
-def require_admin(current_user: User = Depends(get_current_user)) -> User:
+def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     """Require admin role for access"""
-    if current_user.role != UserRole.ADMIN:
+    if current_user.role != "ADMIN":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
@@ -117,9 +169,9 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def require_employee(current_user: User = Depends(get_current_user)) -> User:
+def require_employee(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
     """Require employee role for access"""
-    if current_user.role != UserRole.EMPLOYEE:
+    if current_user.role != "EMPLOYEE":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Employee access required"

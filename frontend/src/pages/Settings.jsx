@@ -25,12 +25,11 @@ export default function Settings() {
     const handleSave = async () => {
         try {
             await api.updateSettings({
-                expected_hours_per_day: settings?.expected_hours_per_day || 8,
-                wfo_days_per_week: settings?.wfo_days_per_week || 3,
-                wfh_days_per_week: settings?.wfh_days_per_week || 2,
-                threshold_red: settings?.thresholds?.red || 70,
-                threshold_amber: settings?.thresholds?.amber || 90,
-                min_hours_for_present: settings?.min_hours_for_present || 6
+                expected_hours_per_day: settings?.expected_hours_per_day || 9,
+                wfo_days_per_week: settings?.wfo_days_per_week || 5,
+                hybrid_days_per_week: settings?.hybrid_days_per_week || 3,
+                threshold_red: settings?.thresholds?.red || 60,
+                threshold_amber: settings?.thresholds?.amber || 90
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
@@ -54,13 +53,13 @@ export default function Settings() {
             <div className="page-header">
                 <h1 className="page-title">Settings</h1>
                 <p className="page-subtitle">
-                    Configure attendance policies and thresholds
+                    Configure attendance policies and compliance thresholds
                 </p>
             </div>
 
-            {/* Work Policy Settings */}
+            {/* Work Mode Policy */}
             <div className="card mb-6">
-                <h3 className="card-title mb-6">Hybrid Work Policy</h3>
+                <h3 className="card-title mb-6">Work Mode Policies</h3>
 
                 <div style={{
                     display: 'grid',
@@ -68,11 +67,11 @@ export default function Settings() {
                     gap: 'var(--spacing-6)'
                 }}>
                     <div className="form-group">
-                        <label className="form-label">Expected Hours Per WFO Day</label>
+                        <label className="form-label">Expected Hours Per Day</label>
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.expected_hours_per_day || 8}
+                            value={settings?.expected_hours_per_day || 9}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 expected_hours_per_day: parseInt(e.target.value)
@@ -94,7 +93,7 @@ export default function Settings() {
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.wfo_days_per_week || 3}
+                            value={settings?.wfo_days_per_week || 5}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 wfo_days_per_week: parseInt(e.target.value)
@@ -107,21 +106,21 @@ export default function Settings() {
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            Required office days per week
+                            Required office days for WFO employees (default 5)
                         </p>
                     </div>
 
                     <div className="form-group">
-                        <label className="form-label">WFH Days Per Week</label>
+                        <label className="form-label">Hybrid Days Per Week</label>
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.wfh_days_per_week || 2}
+                            value={settings?.hybrid_days_per_week || 3}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                wfh_days_per_week: parseInt(e.target.value)
+                                hybrid_days_per_week: parseInt(e.target.value)
                             })}
-                            min="0"
+                            min="1"
                             max="5"
                         />
                         <p style={{
@@ -129,88 +128,65 @@ export default function Settings() {
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            Work from home days per week
+                            Required office days for Hybrid employees (default 3)
                         </p>
                     </div>
                 </div>
 
-                {/* Calculated Weekly Expected */}
+                {/* Work Mode Expected Hours Summary */}
                 <div style={{
                     marginTop: 'var(--spacing-6)',
                     padding: 'var(--spacing-4)',
                     background: 'var(--color-surface-elevated)',
-                    borderRadius: 'var(--radius-lg)'
+                    borderRadius: 'var(--radius-lg)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 'var(--spacing-4)'
                 }}>
-                    <p className="text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
-                        Expected Weekly Office Hours:
-                        <span className="font-bold text-primary" style={{ marginLeft: 'var(--spacing-2)' }}>
-                            {(settings?.wfo_days_per_week || 3) * (settings?.expected_hours_per_day || 8)} hours
-                        </span>
-                        <span className="text-muted" style={{ marginLeft: 'var(--spacing-2)' }}>
-                            ({settings?.expected_weekly_minutes || 960} minutes)
-                        </span>
-                    </p>
-                </div>
-
-                {/* Minimum Hours for Present */}
-                <div style={{ marginTop: 'var(--spacing-6)' }}>
-                    <div className="form-group">
-                        <label className="form-label">Minimum Hours for Present</label>
-                        <input
-                            type="number"
-                            className="form-input"
-                            value={settings?.min_hours_for_present || 6}
-                            onChange={(e) => setSettings({
-                                ...settings,
-                                min_hours_for_present: parseInt(e.target.value)
-                            })}
-                            min="1"
-                            max="12"
-                            style={{ maxWidth: '200px' }}
-                        />
-                        <p style={{
-                            fontSize: 'var(--font-size-xs)',
-                            color: 'var(--color-text-muted)',
-                            marginTop: 'var(--spacing-1)'
-                        }}>
-                            Employees must work at least this many hours to be counted as PRESENT for a day
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFO Expected</p>
+                        <p className="font-bold" style={{ color: '#3b82f6', fontSize: 'var(--font-size-lg)' }}>
+                            {(settings?.wfo_days_per_week || 5) * (settings?.expected_hours_per_day || 9)}h/week
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
+                            {settings?.wfo_days_per_week || 5} days × {settings?.expected_hours_per_day || 9} hrs
+                        </p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Hybrid Expected</p>
+                        <p className="font-bold" style={{ color: '#8b5cf6', fontSize: 'var(--font-size-lg)' }}>
+                            {(settings?.hybrid_days_per_week || 3) * (settings?.expected_hours_per_day || 9)}h/week
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
+                            {settings?.hybrid_days_per_week || 3} days × {settings?.expected_hours_per_day || 9} hrs
+                        </p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFH Expected</p>
+                        <p className="font-bold" style={{ color: '#06b6d4', fontSize: 'var(--font-size-lg)' }}>
+                            Tracking Only
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
+                            Always 100% compliant
                         </p>
                     </div>
                 </div>
-            </div>
 
-            {/* Compliance Definition */}
-            <div className="card mb-6">
-                <h3 className="card-title mb-4">What is Compliance?</h3>
-                <div style={{
-                    padding: 'var(--spacing-4)',
-                    background: 'var(--color-surface-elevated)',
-                    borderRadius: 'var(--radius-lg)',
-                    marginBottom: 'var(--spacing-4)'
-                }}>
-                    <p style={{ marginBottom: 'var(--spacing-3)', lineHeight: '1.6' }}>
-                        <strong>Compliance Percentage</strong> measures how well an employee meets their expected work hours:
-                    </p>
-                    <div style={{
-                        fontFamily: 'monospace',
-                        background: 'var(--color-surface)',
-                        padding: 'var(--spacing-3)',
-                        borderRadius: 'var(--radius-md)',
-                        marginBottom: 'var(--spacing-3)'
+                {/* Note: PRESENT threshold uses Expected Hours Per Day above */}
+                <div style={{ marginTop: 'var(--spacing-4)' }}>
+                    <p style={{
+                        fontSize: 'var(--font-size-xs)',
+                        color: 'var(--color-text-muted)',
+                        fontStyle: 'italic'
                     }}>
-                        Compliance % = (Actual Hours Worked ÷ Expected Hours) × 100
-                    </div>
-                    <ul style={{ paddingLeft: 'var(--spacing-4)', lineHeight: '1.8' }}>
-                        <li><strong>Expected Hours</strong> = WFO Days × Hours per WFO Day</li>
-                        <li><strong>Actual Hours</strong> = Total hours employee worked in office</li>
-                        <li>Employees with &gt; 100% compliance have worked overtime</li>
-                    </ul>
+                        Note: An employee is marked as PRESENT for a day only if they work at least the Expected Hours Per Day configured above.
+                    </p>
                 </div>
             </div>
 
             {/* Compliance Thresholds */}
             <div className="card mb-6">
-                <h3 className="card-title mb-6">Compliance Thresholds (Configurable)</h3>
+                <h3 className="card-title mb-6">Compliance Thresholds</h3>
 
                 <p className="text-muted mb-4" style={{ fontSize: 'var(--font-size-sm)' }}>
                     Set the percentage thresholds that determine employee compliance status
@@ -221,7 +197,7 @@ export default function Settings() {
                     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
                     gap: 'var(--spacing-6)'
                 }}>
-                    {/* Red Threshold Input */}
+                    {/* Non-Compliance (RED) */}
                     <div style={{
                         padding: 'var(--spacing-4)',
                         background: 'var(--color-status-red-bg)',
@@ -235,14 +211,14 @@ export default function Settings() {
                                 background: 'var(--color-status-red)',
                                 borderRadius: 'var(--radius-full)'
                             }}></span>
-                            <span className="font-medium">Below Target (Non-Compliant)</span>
+                            <span className="font-medium">Non-Compliance</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <span>&lt;</span>
                             <input
                                 type="number"
                                 className="form-input"
-                                value={settings?.thresholds?.red || 70}
+                                value={settings?.thresholds?.red || 60}
                                 onChange={(e) => setSettings({
                                     ...settings,
                                     thresholds: {
@@ -257,11 +233,11 @@ export default function Settings() {
                             <span>%</span>
                         </div>
                         <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Employees below this % need improvement
+                            Employees below this need improvement
                         </p>
                     </div>
 
-                    {/* Amber Threshold Input */}
+                    {/* Mid-Compliance (AMBER) */}
                     <div style={{
                         padding: 'var(--spacing-4)',
                         background: 'var(--color-status-amber-bg)',
@@ -275,10 +251,10 @@ export default function Settings() {
                                 background: 'var(--color-status-amber)',
                                 borderRadius: 'var(--radius-full)'
                             }}></span>
-                            <span className="font-medium">Meets Target (Compliant)</span>
+                            <span className="font-medium">Mid-Compliance</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <span>{settings?.thresholds?.red || 70}% -</span>
+                            <span>{settings?.thresholds?.red || 60}% –</span>
                             <input
                                 type="number"
                                 className="form-input"
@@ -301,7 +277,7 @@ export default function Settings() {
                         </p>
                     </div>
 
-                    {/* Green Threshold (Display Only) */}
+                    {/* Compliance (GREEN) */}
                     <div style={{
                         padding: 'var(--spacing-4)',
                         background: 'var(--color-status-green-bg)',
@@ -315,10 +291,10 @@ export default function Settings() {
                                 background: 'var(--color-status-green)',
                                 borderRadius: 'var(--radius-full)'
                             }}></span>
-                            <span className="font-medium">Excellent (Top Performer)</span>
+                            <span className="font-medium">Compliance</span>
                         </div>
                         <p className="text-green font-bold" style={{ fontSize: 'var(--font-size-xl)' }}>
-                            &gt; {settings?.thresholds?.amber || 90}%
+                            &ge; {settings?.thresholds?.amber || 90}%
                         </p>
                         <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
                             Outstanding compliance
