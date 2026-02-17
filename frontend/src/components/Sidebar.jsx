@@ -3,8 +3,7 @@ import {
     LayoutDashboard,
     Upload,
     Users,
-    FileText,
-    Building2,
+    CalendarDays,
     Settings,
     Fingerprint
 } from 'lucide-react';
@@ -13,6 +12,7 @@ const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
     { path: '/employees', icon: Users, label: 'All Employees' },
+    { path: '/monthly-report', icon: CalendarDays, label: 'Monthly Report' },
     { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 

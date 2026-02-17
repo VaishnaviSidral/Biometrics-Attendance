@@ -53,7 +53,7 @@ export default function Header({ title, onMenuClick }) {
 
             <div className="header-actions">
                 {/* Search */}
-                {!hideSearch && isAdmin && (
+                {/* {!hideSearch && isAdmin && (
                     <div style={{ position: 'relative' }}>
                         <Search
                             size={18}
@@ -80,7 +80,7 @@ export default function Header({ title, onMenuClick }) {
                             }}
                         />
                     </div>
-                )}
+                )} */}
 
                 {/* Theme Toggle */}
                 <button

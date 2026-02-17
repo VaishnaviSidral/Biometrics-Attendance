@@ -47,13 +47,17 @@ export default function Settings() {
         );
     }
 
+    const wfoDays = settings?.wfo_days_per_week || 5;
+    const hybridDays = settings?.hybrid_days_per_week || 3;
+    const hoursPerDay = settings?.expected_hours_per_day || 9;
+
     return (
         <div className="animate-fade-in">
             {/* Page Header */}
             <div className="page-header">
                 <h1 className="page-title">Settings</h1>
                 <p className="page-subtitle">
-                    Configure attendance policies and compliance thresholds
+                    Configure attendance policies and compliance rules
                 </p>
             </div>
 
@@ -71,7 +75,7 @@ export default function Settings() {
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.expected_hours_per_day || 9}
+                            value={hoursPerDay}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 expected_hours_per_day: parseInt(e.target.value)
@@ -93,20 +97,20 @@ export default function Settings() {
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.wfo_days_per_week || 5}
+                            value={wfoDays}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 wfo_days_per_week: parseInt(e.target.value)
                             })}
                             min="1"
-                            max="5"
+                            max="7"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            Required office days for WFO employees (default 5)
+                            Required office days for WFO employees
                         </p>
                     </div>
 
@@ -115,25 +119,25 @@ export default function Settings() {
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.hybrid_days_per_week || 3}
+                            value={hybridDays}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 hybrid_days_per_week: parseInt(e.target.value)
                             })}
                             min="1"
-                            max="5"
+                            max="7"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            Required office days for Hybrid employees (default 3)
+                            Required office days for Hybrid employees
                         </p>
                     </div>
                 </div>
 
-                {/* Work Mode Expected Hours Summary */}
+                {/* Summary */}
                 <div style={{
                     marginTop: 'var(--spacing-6)',
                     padding: 'var(--spacing-4)',
@@ -144,162 +148,116 @@ export default function Settings() {
                     gap: 'var(--spacing-4)'
                 }}>
                     <div>
-                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFO Expected</p>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFO Required</p>
                         <p className="font-bold" style={{ color: '#3b82f6', fontSize: 'var(--font-size-lg)' }}>
-                            {(settings?.wfo_days_per_week || 5) * (settings?.expected_hours_per_day || 9)}h/week
+                            {wfoDays * hoursPerDay}h/week
                         </p>
                         <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
-                            {settings?.wfo_days_per_week || 5} days × {settings?.expected_hours_per_day || 9} hrs
+                            {wfoDays} days × {hoursPerDay} hrs
                         </p>
                     </div>
                     <div>
-                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Hybrid Expected</p>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Hybrid Required</p>
                         <p className="font-bold" style={{ color: '#8b5cf6', fontSize: 'var(--font-size-lg)' }}>
-                            {(settings?.hybrid_days_per_week || 3) * (settings?.expected_hours_per_day || 9)}h/week
+                            {hybridDays * hoursPerDay}h/week
                         </p>
                         <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
-                            {settings?.hybrid_days_per_week || 3} days × {settings?.expected_hours_per_day || 9} hrs
+                            {hybridDays} days × {hoursPerDay} hrs
                         </p>
                     </div>
                     <div>
-                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFH Expected</p>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFH</p>
                         <p className="font-bold" style={{ color: '#06b6d4', fontSize: 'var(--font-size-lg)' }}>
-                            Tracking Only
+                            Exempted
                         </p>
                         <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
-                            Always 100% compliant
+                            Not counted in compliance
                         </p>
                     </div>
-                </div>
-
-                {/* Note: PRESENT threshold uses Expected Hours Per Day above */}
-                <div style={{ marginTop: 'var(--spacing-4)' }}>
-                    <p style={{
-                        fontSize: 'var(--font-size-xs)',
-                        color: 'var(--color-text-muted)',
-                        fontStyle: 'italic'
-                    }}>
-                        Note: An employee is marked as PRESENT for a day only if they work at least the Expected Hours Per Day configured above.
-                    </p>
                 </div>
             </div>
 
-            {/* Compliance Thresholds */}
+            {/* Compliance Rules */}
             <div className="card mb-6">
-                <h3 className="card-title mb-6">Compliance Thresholds</h3>
-
-                <p className="text-muted mb-4" style={{ fontSize: 'var(--font-size-sm)' }}>
-                    Set the percentage thresholds that determine employee compliance status
-                </p>
+                <h3 className="card-title mb-6">Compliance Rules</h3>
 
                 <div style={{
                     display: 'grid',
                     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                    gap: 'var(--spacing-6)'
+                    gap: 'var(--spacing-4)'
                 }}>
-                    {/* Non-Compliance (RED) */}
-                    <div style={{
-                        padding: 'var(--spacing-4)',
-                        background: 'var(--color-status-red-bg)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-status-red-border)'
-                    }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span style={{
-                                width: '12px',
-                                height: '12px',
-                                background: 'var(--color-status-red)',
-                                borderRadius: 'var(--radius-full)'
-                            }}></span>
-                            <span className="font-medium">Non-Compliance</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span>&lt;</span>
-                            <input
-                                type="number"
-                                className="form-input"
-                                value={settings?.thresholds?.red || 60}
-                                onChange={(e) => setSettings({
-                                    ...settings,
-                                    thresholds: {
-                                        ...settings?.thresholds,
-                                        red: parseInt(e.target.value)
-                                    }
-                                })}
-                                min="0"
-                                max="100"
-                                style={{ width: '80px', textAlign: 'center' }}
-                            />
-                            <span>%</span>
-                        </div>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Employees below this need improvement
-                        </p>
-                    </div>
-
-                    {/* Mid-Compliance (AMBER) */}
-                    <div style={{
-                        padding: 'var(--spacing-4)',
-                        background: 'var(--color-status-amber-bg)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-status-amber-border)'
-                    }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span style={{
-                                width: '12px',
-                                height: '12px',
-                                background: 'var(--color-status-amber)',
-                                borderRadius: 'var(--radius-full)'
-                            }}></span>
-                            <span className="font-medium">Mid-Compliance</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span>{settings?.thresholds?.red || 60}% –</span>
-                            <input
-                                type="number"
-                                className="form-input"
-                                value={settings?.thresholds?.amber || 90}
-                                onChange={(e) => setSettings({
-                                    ...settings,
-                                    thresholds: {
-                                        ...settings?.thresholds,
-                                        amber: parseInt(e.target.value)
-                                    }
-                                })}
-                                min="0"
-                                max="100"
-                                style={{ width: '80px', textAlign: 'center' }}
-                            />
-                            <span>%</span>
-                        </div>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Satisfactory performance range
-                        </p>
-                    </div>
-
-                    {/* Compliance (GREEN) */}
                     <div style={{
                         padding: 'var(--spacing-4)',
                         background: 'var(--color-status-green-bg)',
                         borderRadius: 'var(--radius-lg)',
                         border: '1px solid var(--color-status-green-border)'
                     }}>
-                        <div className="flex items-center gap-2 mb-3">
+                        <div className="flex items-center gap-2 mb-2">
                             <span style={{
-                                width: '12px',
-                                height: '12px',
+                                width: '12px', height: '12px',
                                 background: 'var(--color-status-green)',
                                 borderRadius: 'var(--radius-full)'
                             }}></span>
-                            <span className="font-medium">Compliance</span>
+                            <span className="font-medium">COMPLIANT</span>
                         </div>
-                        <p className="text-green font-bold" style={{ fontSize: 'var(--font-size-xl)' }}>
-                            &ge; {settings?.thresholds?.amber || 90}%
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            Total weekly hours ≥ required hours
                         </p>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Outstanding compliance
+                        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            WFO: ≥ {wfoDays * hoursPerDay}h &nbsp;|&nbsp; Hybrid: ≥ {hybridDays * hoursPerDay}h
                         </p>
                     </div>
+
+                    <div style={{
+                        padding: 'var(--spacing-4)',
+                        background: 'var(--color-status-red-bg)',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid var(--color-status-red-border)'
+                    }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span style={{
+                                width: '12px', height: '12px',
+                                background: 'var(--color-status-red)',
+                                borderRadius: 'var(--radius-full)'
+                            }}></span>
+                            <span className="font-medium">NON-COMPLIANT</span>
+                        </div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            Total weekly hours &lt; required hours
+                        </p>
+                    </div>
+
+                    <div style={{
+                        padding: 'var(--spacing-4)',
+                        background: '#dbeafe',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid #93c5fd'
+                    }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span style={{
+                                width: '12px', height: '12px',
+                                background: '#2563eb',
+                                borderRadius: 'var(--radius-full)'
+                            }}></span>
+                            <span className="font-medium">EXEMPTED</span>
+                        </div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            WFH employees — not counted in compliance metrics
+                        </p>
+                    </div>
+                </div>
+
+                {/* Attendance note */}
+                <div style={{
+                    marginTop: 'var(--spacing-4)',
+                    padding: 'var(--spacing-3)',
+                    background: 'var(--color-surface-elevated)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--font-size-sm)',
+                    color: 'var(--color-text-muted)'
+                }}>
+                    <strong>Attendance Rule:</strong> An employee is marked <strong>PRESENT</strong> for a day if they have any biometric office time recorded ({'>'}0 minutes).
+                    Compliance is calculated separately at the weekly level based on total hours vs required hours.
                 </div>
             </div>
 
@@ -312,7 +270,7 @@ export default function Settings() {
 
                 <button className="btn btn-secondary" onClick={fetchSettings}>
                     <RefreshCw size={18} />
-                    Reset to Defaults
+                    Reset
                 </button>
 
                 {saved && (

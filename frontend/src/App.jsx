@@ -9,6 +9,7 @@ import UploadData from './pages/UploadData';
 import AllEmployees from './pages/AllEmployees';
 import IndividualReport from './pages/IndividualReport';
 import Settings from './pages/Settings';
+import MonthlyReport from './pages/MonthlyReport';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 
 function Layout() {
@@ -21,6 +22,7 @@ function Layout() {
       '/': 'Dashboard',
       '/upload': 'Upload Data',
       '/employees': 'All Employees',
+      '/monthly-report': 'Monthly Report',
       '/settings': 'Settings',
       '/employee-dashboard': 'My Attendance'
     };
@@ -76,6 +78,14 @@ function Layout() {
             element={
               <ProtectedRoute requireAdmin>
                 <AllEmployees />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/monthly-report"
+            element={
+              <ProtectedRoute requireAdmin>
+                <MonthlyReport />
               </ProtectedRoute>
             }
           />

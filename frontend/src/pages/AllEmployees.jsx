@@ -7,11 +7,11 @@ import StatusBadge from '../components/StatusBadge';
 
 export default function AllEmployees() {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [employees, setEmployees] = useState([]);
     const [weeks, setWeeks] = useState([]);
-    const [selectedWeek, setSelectedWeek] = useState('');
+    const [selectedWeek, setSelectedWeek] = useState(searchParams.get('week_start') || '');
     const [statusFilter, setStatusFilter] = useState('');
     const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
     const [sortBy, setSortBy] = useState('name');
@@ -19,6 +19,9 @@ export default function AllEmployees() {
 
     // Work mode tab: '' = All, 'WFO', 'HYBRID', 'WFH'
     const [workModeTab, setWorkModeTab] = useState('');
+
+    // Dashboard navigation filter: 'non_exempt', 'compliant', 'non_compliant'
+    const [dashboardFilter, setDashboardFilter] = useState(searchParams.get('filter') || '');
 
     useEffect(() => {
         fetchData();
@@ -46,14 +49,48 @@ export default function AllEmployees() {
 
     const handleExport = async () => {
         try {
-            await api.exportAllEmployees(selectedWeek);
+            await api.exportAllEmployees({
+                week_start: selectedWeek || undefined,
+                work_mode: workModeTab || undefined,
+                status_filter: statusFilter || undefined,
+                sort_by: sortBy || undefined,
+                sort_order: sortOrder || undefined
+            });
         } catch (err) {
             console.error('Export error:', err);
         }
     };
 
-    // Filter employees based on search, status, and work mode tab
+    // Clear dashboard filter when user changes other filters manually
+    const clearDashboardFilter = () => {
+        if (dashboardFilter) {
+            setDashboardFilter('');
+            // Clean URL params
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('filter');
+            setSearchParams(newParams, { replace: true });
+        }
+    };
+
+    // Filter employees based on search, status, work mode tab, and dashboard filter
     const filteredEmployees = employees.filter(emp => {
+        // Dashboard navigation filter (from dashboard cards)
+        if (dashboardFilter) {
+            const empWorkMode = (emp.work_mode || 'WFO').toUpperCase();
+            if (dashboardFilter === 'non_exempt') {
+                // Show only WFO + HYBRID (not WFH)
+                if (empWorkMode === 'WFH') return false;
+            } else if (dashboardFilter === 'compliant') {
+                // Show non-exempt employees with GREEN status (≥90% compliance)
+                if (empWorkMode === 'WFH') return false;
+                if (emp.status !== 'GREEN') return false;
+            } else if (dashboardFilter === 'non_compliant') {
+                // Show non-exempt employees with AMBER or RED status (<90% compliance)
+                if (empWorkMode === 'WFH') return false;
+                if (emp.status === 'GREEN') return false;
+            }
+        }
+
         // Search filter
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
@@ -279,6 +316,13 @@ export default function AllEmployees() {
 
     const columns = workModeTab ? getColumns() : allColumns;
 
+    // Dashboard filter label for display
+    const dashboardFilterLabels = {
+        'non_exempt': 'Non-Exempted Employees (WFO + Hybrid)',
+        'compliant': 'Compliant to WFO Policy (≥90%)',
+        'non_compliant': 'Non-Compliant to WFO Policy (<90%)'
+    };
+
     return (
         <div className="animate-fade-in">
             {/* Page Header */}
@@ -288,6 +332,30 @@ export default function AllEmployees() {
                     View and analyze attendance data for all employees
                 </p>
             </div>
+
+            {/* Dashboard Filter Banner */}
+            {dashboardFilter && dashboardFilterLabels[dashboardFilter] && (
+                <div className="card mb-4" style={{
+                    background: 'var(--color-primary-bg, #eff6ff)',
+                    borderColor: 'var(--color-primary, #3b82f6)',
+                    borderLeft: '4px solid var(--color-primary, #3b82f6)',
+                    padding: 'var(--spacing-3) var(--spacing-4)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                }}>
+                    <span style={{ fontWeight: 600, color: 'var(--color-primary, #3b82f6)' }}>
+                        Filtered: {dashboardFilterLabels[dashboardFilter]}
+                    </span>
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={clearDashboardFilter}
+                        style={{ fontSize: 'var(--font-size-sm)' }}
+                    >
+                        Clear Filter
+                    </button>
+                </div>
+            )}
 
             {/* Filters */}
             <div className="card mb-6">

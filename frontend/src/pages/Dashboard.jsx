@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users,
-    Clock,
-    Building2,
+    UserCheck,
+    ShieldCheck,
+    ShieldX,
     AlertTriangle,
-    TrendingUp,
     Calendar,
     X
 } from 'lucide-react';
@@ -25,7 +25,6 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
-import DataTable from '../components/DataTable';
 
 const COLORS = {
     GREEN: '#10b981',
@@ -39,7 +38,7 @@ export default function Dashboard() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
-    const [employees, setEmployees] = useState([]);
+    const [complianceStats, setComplianceStats] = useState(null);
     const [error, setError] = useState(null);
 
     // New State for Chart & Modal
@@ -57,20 +56,19 @@ export default function Dashboard() {
     useEffect(() => {
         if (selectedWeek || weeks.length > 0) {
             fetchChartData();
+            fetchComplianceStats();
         }
     }, [selectedWeek, weeks]);
 
     const fetchInitialData = async () => {
         try {
             setLoading(true);
-            const [dashboardData, employeesData, weeksData] = await Promise.all([
+            const [dashboardData, weeksData] = await Promise.all([
                 api.getDashboardSummary(),
-                api.getAllEmployeesReport({ sort_by: 'compliance', sort_order: 'asc' }),
                 api.getAvailableWeeks()
             ]);
 
             setSummary(dashboardData);
-            setEmployees(employeesData.employees || []);
             setWeeks(weeksData.weeks || []);
 
             // Set default week if available
@@ -93,6 +91,16 @@ export default function Dashboard() {
             }
         } catch (err) {
             console.error('Error fetching chart stats:', err);
+        }
+    };
+
+    const fetchComplianceStats = async () => {
+        try {
+            const params = selectedWeek ? { week_start: selectedWeek } : {};
+            const data = await api.getWeeklyComplianceStats(params);
+            setComplianceStats(data);
+        } catch (err) {
+            console.error('Error fetching compliance stats:', err);
         }
     };
 
@@ -121,57 +129,6 @@ export default function Dashboard() {
             setModalLoading(false);
         }
     };
-
-    const columns = [
-        {
-            key: 'employee_name',
-            label: 'Employee',
-            sortable: true,
-            render: (value, row) => (
-                <div className="cell-employee">
-                    <div className="employee-avatar">
-                        {value?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="employee-info">
-                        <span className="employee-name">{value}</span>
-                        <span className="employee-code">ID: {row.employee_code}</span>
-                    </div>
-                </div>
-            )
-        },
-        {
-            key: 'total_office_hours',
-            label: 'Office Hours',
-            sortable: true
-        },
-        {
-            key: 'wfo_days',
-            label: 'WFO Days',
-            sortable: true
-        },
-        {
-            key: 'compliance_percentage',
-            label: 'Compliance',
-            sortable: true,
-            render: (value, row) => (
-                <div className="flex items-center gap-3">
-                    <div className="progress-bar" style={{ width: '100px' }}>
-                        <div
-                            className={`progress-fill ${row.status?.toLowerCase()}`}
-                            style={{ width: `${Math.min(value, 100)}%` }}
-                        />
-                    </div>
-                    <span className="font-medium">{value?.toFixed(1)}%</span>
-                </div>
-            )
-        },
-        {
-            key: 'status',
-            label: 'Status',
-            sortable: true,
-            render: (value) => <StatusBadge status={value} />
-        }
-    ];
 
     // Prepare pie chart data
     const pieData = summary?.status_distribution ? [
@@ -247,54 +204,37 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Summary Cards */}
+            {/* Summary Cards - Weekly Compliance Stats */}
             <div className="summary-cards">
                 <SummaryCard
                     icon={Users}
-                    value={summary?.total_employees || 0}
+                    value={complianceStats?.total_employees ?? summary?.total_employees ?? 0}
                     label="Total Employees"
-                    description="Active employees in the system for this week."
-                    onClick={() => {
-                        setModalData({
-                            title: 'All Employees',
-                            employees: employees
-                        });
-                        setModalOpen(true);
-                    }}
+                    description="All employees registered in the system."
+                    onClick={() => navigate(`/employees${selectedWeek ? `?week_start=${selectedWeek}` : ''}`)}
                 />
                 <SummaryCard
-                    icon={TrendingUp}
-                    value={`${summary?.avg_compliance?.toFixed(1) || 0}%`}
-                    label="Average Compliance"
-                    description="Overall adherence to WFO policy."
-                    status={
-                        (summary?.avg_compliance || 0) >= 90 ? 'green' :
-                            (summary?.avg_compliance || 0) >= 60 ? 'amber' : 'red'
-                    }
+                    icon={UserCheck}
+                    value={complianceStats?.non_exempt_employees ?? 0}
+                    label="Non-Exempted Employees"
+                    description="WFO + Hybrid employees (excludes WFH)."
+                    onClick={() => navigate(`/employees?filter=non_exempt${selectedWeek ? `&week_start=${selectedWeek}` : ''}`)}
                 />
                 <SummaryCard
-                    icon={Building2}
-                    value={summary?.total_wfo_days || 0}
-                    label="Total WFO Days"
-                    description="Cumulative office days worked this week."
+                    icon={ShieldCheck}
+                    value={complianceStats?.compliant_employees ?? 0}
+                    label="Compliant to WFO Policy"
+                    description="Non-exempt employees meeting WFO policy (≥90%)."
                     status="green"
+                    onClick={() => navigate(`/employees?filter=compliant${selectedWeek ? `&week_start=${selectedWeek}` : ''}`)}
                 />
                 <SummaryCard
-                    icon={AlertTriangle}
-                    value={summary?.alerts || 0}
-                    label="Employees Below Target"
-                    description="Employees with < 60% compliance (Non-Compliance)."
+                    icon={ShieldX}
+                    value={complianceStats?.non_compliant_employees ?? 0}
+                    label="Non-Compliant to WFO Policy"
+                    description="Non-exempt employees below WFO policy (<90%)."
                     status="red"
-                    onClick={() => {
-                        const belowTarget = employees.filter(emp =>
-                            emp.status?.toLowerCase() === 'red'
-                        );
-                        setModalData({
-                            title: 'Employees Below Target',
-                            employees: belowTarget
-                        });
-                        setModalOpen(true);
-                    }}
+                    onClick={() => navigate(`/employees?filter=non_compliant${selectedWeek ? `&week_start=${selectedWeek}` : ''}`)}
                 />
             </div>
 
@@ -382,27 +322,6 @@ export default function Dashboard() {
                         </div>
                     )}
                 </div>
-            </div>
-
-            {/* Employees Table */}
-            <div className="table-container mt-8">
-                <div className="table-header">
-                    <h3 className="table-title">Employee Attendance Overview</h3>
-                    <div className="table-actions">
-                        <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => navigate('/employees')}
-                        >
-                            View All
-                        </button>
-                    </div>
-                </div>
-                <DataTable
-                    columns={columns}
-                    data={employees.slice(0, 5)}
-                    onRowClick={(row) => navigate(`/employee/${row.employee_code}`)}
-                    emptyMessage="No employee data yet. Upload attendance data to see reports."
-                />
             </div>
 
             {/* Drill Down Modal */}

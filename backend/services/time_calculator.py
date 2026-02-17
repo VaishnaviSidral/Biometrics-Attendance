@@ -70,9 +70,6 @@ class TimeCalculator:
         self.expected_daily_minutes = expected_hours_per_day * 60
         self.expected_weekly_minutes = wfo_days_per_week * expected_hours_per_day * 60
 
-        # Use expected_hours_per_day as the minimum for PRESENT status
-        self.min_minutes_for_present = expected_hours_per_day * 60
-
         # Build dynamic config from the actual settings
         self.work_mode_config = build_work_mode_config(
             expected_hours_per_day=expected_hours_per_day,
@@ -124,8 +121,9 @@ class TimeCalculator:
         else:
             total_minutes = self._calculate_from_pairs(in_times, out_times)
 
-        # Determine status: PRESENT if worked >= expected_hours_per_day
-        if total_minutes >= self.min_minutes_for_present:
+        # Presence logic: PRESENT if any time > 0 OR any in_time exists
+        # The 9-hour rule is for COMPLIANCE only, NOT for presence
+        if total_minutes > 0 or in_times:
             status = "PRESENT"
         else:
             status = "ABSENT"

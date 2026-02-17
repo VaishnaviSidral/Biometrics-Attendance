@@ -115,6 +115,11 @@ export const api = {
         return request(`/employee/attendance?${searchParams}`);
     },
 
+    getEmployeeWeeklyCompliance: (params = {}) => {
+        const searchParams = new URLSearchParams(params);
+        return request(`/employee/weekly-compliance?${searchParams}`);
+    },
+
     // Dashboard
     getDashboardSummary: () => request('/reports/dashboard'),
 
@@ -126,6 +131,11 @@ export const api = {
     getDailyDetails: (params = {}) => {
         const searchParams = new URLSearchParams(params);
         return request(`/reports/daily-details?${searchParams}`);
+    },
+
+    getWeeklyComplianceStats: (params = {}) => {
+        const searchParams = new URLSearchParams(params);
+        return request(`/reports/weekly-compliance-stats?${searchParams}`);
     },
 
     // Settings
@@ -178,10 +188,44 @@ export const api = {
 
     getAvailableWeeks: () => request('/reports/weeks'),
 
+    // Monthly Report (Admin)
+    getMonthlyReport: async (params = {}) => {
+        const searchParams = new URLSearchParams();
+        if (params.month) searchParams.set('month', params.month);
+        if (params.search) searchParams.set('search', params.search);
+        const res = await request(`/reports/monthly-report?${searchParams}`);
+
+        // handle both cases safely
+        if (!res) return [];
+        if (Array.isArray(res)) return res;
+        if (res.data) return res.data;
+
+        return [];
+    },
+
+    exportMonthlyReport: async (params = {}) => {
+        const searchParams = new URLSearchParams();
+        if (params.month) searchParams.set('month', params.month);
+        if (params.search) searchParams.set('search', params.search);
+        const blob = await request(`/reports/monthly-report/export?${searchParams}`);
+        downloadBlob(blob, `monthly_report_${params.month || 'all'}.csv`);
+    },
+
+    exportMonthlyIndividual: async (employeeCode, month) => {
+        const blob = await request(`/reports/monthly-report/export/${employeeCode}?month=${month}`);
+        downloadBlob(blob, `${employeeCode}_${month}_report.csv`);
+    },
+    
     // Exports
-    exportAllEmployees: async (weekStart) => {
-        const params = weekStart ? `?week_start=${weekStart}` : '';
-        const blob = await request(`/reports/export/all-employees${params}`);
+    exportAllEmployees: async (filters = {}) => {
+        const searchParams = new URLSearchParams();
+        if (filters.week_start) searchParams.set('week_start', filters.week_start);
+        if (filters.work_mode) searchParams.set('work_mode', filters.work_mode);
+        if (filters.status_filter) searchParams.set('status_filter', filters.status_filter);
+        if (filters.sort_by) searchParams.set('sort_by', filters.sort_by);
+        if (filters.sort_order) searchParams.set('sort_order', filters.sort_order);
+        const qs = searchParams.toString();
+        const blob = await request(`/reports/export/all-employees${qs ? `?${qs}` : ''}`);
         downloadBlob(blob, 'all_employees_report.csv');
     },
 

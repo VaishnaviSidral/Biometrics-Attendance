@@ -564,6 +564,12 @@ td {
   border: 1px solid var(--color-status-red-border);
 }
 
+.status-badge.blue {
+  background: #dbeafe;
+  color: #2563eb;
+  border: 1px solid #93c5fd;
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
@@ -863,6 +869,10 @@ td {
 
 .progress-fill.red {
   background: var(--gradient-danger);
+}
+
+.progress-fill.blue {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
 
 /* ============================================
