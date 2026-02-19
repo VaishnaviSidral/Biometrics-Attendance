@@ -42,6 +42,24 @@ export default function MonthlyReport() {
             setLoading(false);
         }
     };
+    const handleExportCSV = async () => {
+        try {
+            if (!month) return;
+    
+            // month = "2026-02"
+            const [year, m] = month.split("-");
+            const monthName = new Date(month + "-01").toLocaleDateString("en-US", { month: "long" }).toLowerCase();
+    
+            const filename = `monthly_report_${monthName}_${year}.csv`;
+    
+            await api.exportMonthlyReportCSV(
+                { month, search: debouncedSearch },
+                filename
+            );
+        } catch (err) {
+            console.error("Monthly export error:", err);
+        }
+    };
     
 
     const handleIndividualExport = async (employeeCode) => {
@@ -121,6 +139,23 @@ export default function MonthlyReport() {
                             />
                         </div>
                     </div>
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleExportCSV}
+                        disabled={!month || loading}
+                        style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            width: "fit-content",
+                            justifySelf: "start",   // 👈 prevents full column stretch
+                            padding: "12px 13px"    // 👈 tighter button
+                        }}
+                    >
+                        <Download size={18} />
+                        Export CSV
+                    </button>
+
                 </div>
             </div>
 

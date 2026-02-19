@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users,
@@ -25,6 +25,12 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
+import {
+    getCurrentISOWeek,
+    generateISOWeeks,
+    isoWeekToDateString,
+    getYearRange,
+} from '../utils/isoWeek';
 
 const COLORS = {
     GREEN: '#10b981',
@@ -41,40 +47,47 @@ export default function Dashboard() {
     const [complianceStats, setComplianceStats] = useState(null);
     const [error, setError] = useState(null);
 
-    // New State for Chart & Modal
-    const [weeks, setWeeks] = useState([]);
-    const [selectedWeek, setSelectedWeek] = useState('');
+    // Calendar-based year + week selection
+    const currentISO = getCurrentISOWeek();
+    const [selectedYear, setSelectedYear] = useState(currentISO.year);
+    const [selectedWeekValue, setSelectedWeekValue] = useState(
+        `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
+    );
+
+    // Generate ISO weeks for the selected year (calendar-driven, never from DB)
+    const years = useMemo(() => getYearRange(), []);
+    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+
+    // Chart & modal state
     const [chartData, setChartData] = useState([]);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalLoading, setModalLoading] = useState(false);
     const [modalData, setModalData] = useState({ title: '', employees: [] });
 
+    // Convert ISO week value to YYYY-MM-DD for API calls
+    const weekStartDate = useMemo(
+        () => isoWeekToDateString(selectedWeekValue),
+        [selectedWeekValue]
+    );
+
+    // Fetch dashboard summary once on mount
     useEffect(() => {
-        fetchInitialData();
+        fetchSummary();
     }, []);
 
+    // Fetch chart + compliance data whenever week selection changes
     useEffect(() => {
-        if (selectedWeek || weeks.length > 0) {
+        if (weekStartDate) {
             fetchChartData();
             fetchComplianceStats();
         }
-    }, [selectedWeek, weeks]);
+    }, [weekStartDate]);
 
-    const fetchInitialData = async () => {
+    const fetchSummary = async () => {
         try {
             setLoading(true);
-            const [dashboardData, weeksData] = await Promise.all([
-                api.getDashboardSummary(),
-                api.getAvailableWeeks()
-            ]);
-
+            const dashboardData = await api.getDashboardSummary();
             setSummary(dashboardData);
-            setWeeks(weeksData.weeks || []);
-
-            // Set default week if available
-            if (weeksData.weeks && weeksData.weeks.length > 0 && !selectedWeek) {
-                setSelectedWeek(weeksData.weeks[0].week_start);
-            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -84,23 +97,40 @@ export default function Dashboard() {
 
     const fetchChartData = async () => {
         try {
-            const params = selectedWeek ? { week_start: selectedWeek } : {};
+            const params = weekStartDate ? { week_start: weekStartDate } : {};
             const data = await api.getDashboardStats(params);
             if (data && data.stats) {
                 setChartData(data.stats);
+            } else {
+                setChartData([]);
             }
         } catch (err) {
             console.error('Error fetching chart stats:', err);
+            setChartData([]);
         }
     };
 
     const fetchComplianceStats = async () => {
         try {
-            const params = selectedWeek ? { week_start: selectedWeek } : {};
+            const params = weekStartDate ? { week_start: weekStartDate } : {};
             const data = await api.getWeeklyComplianceStats(params);
             setComplianceStats(data);
         } catch (err) {
             console.error('Error fetching compliance stats:', err);
+            setComplianceStats(null);
+        }
+    };
+
+    // When year changes, auto-select the first week of that year
+    // (or current week if it's the current year)
+    const handleYearChange = (newYear) => {
+        setSelectedYear(newYear);
+        if (newYear === currentISO.year) {
+            setSelectedWeekValue(
+                `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
+            );
+        } else {
+            setSelectedWeekValue(`${newYear}-W01`);
         }
     };
 
@@ -109,14 +139,11 @@ export default function Dashboard() {
         try {
             setModalLoading(true);
             setModalOpen(true);
-            // type is 'WFO' or 'WFH'
             const dateStr = data.date;
-
             setModalData({
                 title: `${type} Employees - ${new Date(dateStr).toLocaleDateString()}`,
                 employees: []
             });
-
             const details = await api.getDailyDetails({ date: dateStr, status: type });
             setModalData({
                 title: `${type} Employees - ${new Date(dateStr).toLocaleDateString()}`,
@@ -130,12 +157,16 @@ export default function Dashboard() {
         }
     };
 
-    // Prepare pie chart data
-    const pieData = summary?.status_distribution ? [
-        { name: 'Excellent', value: summary.status_distribution.GREEN, color: COLORS.GREEN },
-        { name: 'Meets Target', value: summary.status_distribution.AMBER, color: COLORS.AMBER },
-        { name: 'Below Target', value: summary.status_distribution.RED, color: COLORS.RED }
+    // Pie chart data
+    const pieData = complianceStats ? [
+        { name: 'Compliance', value: complianceStats.compliant_employees || 0, color: COLORS.GREEN },
+        { name: 'Mid-Compliance', value: complianceStats.partial_compliant_employees || 0, color: COLORS.AMBER },
+        { name: 'Non-Compliance', value: complianceStats.non_compliant_employees || 0, color: COLORS.RED }
     ].filter(d => d.value > 0) : [];
+    
+
+    // Week label for the subtitle
+    const selectedWeekObj = isoWeeks.find(w => w.value === selectedWeekValue);
 
     if (loading) {
         return (
@@ -151,7 +182,7 @@ export default function Dashboard() {
                 <AlertTriangle size={64} style={{ color: 'var(--color-status-amber)' }} />
                 <h2 className="empty-state-title">Unable to load dashboard</h2>
                 <p className="empty-state-text">{error}</p>
-                <button className="btn btn-primary" onClick={fetchInitialData}>
+                <button className="btn btn-primary" onClick={fetchSummary}>
                     Retry
                 </button>
             </div>
@@ -166,37 +197,34 @@ export default function Dashboard() {
                     <div>
                         <h1 className="page-title">Dashboard</h1>
                         <p className="page-subtitle">
-                            {selectedWeek && weeks.length > 0
-                                ? (() => {
-                                    const selectedWeekObj = weeks.find(w => w.week_start === selectedWeek);
-                                    if (selectedWeekObj) {
-                                        return `Week of ${new Date(selectedWeekObj.week_start).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric'
-                                        })} - ${new Date(selectedWeekObj.week_end).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric'
-                                        })}`;
-                                    }
-                                    return 'Attendance Overview';
-                                })()
+                            {selectedWeekObj
+                                ? `${selectedWeekObj.label}`
                                 : 'Attendance Overview'}
                         </p>
                     </div>
 
-                    {/* Week Filter */}
+                    {/* Year + Week Filters */}
                     <div className="flex items-center gap-2">
                         <Calendar size={18} className="text-muted" />
                         <select
                             className="form-input form-select"
-                            value={selectedWeek}
-                            onChange={(e) => setSelectedWeek(e.target.value)}
-                            style={{ width: '200px' }}
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(Number(e.target.value))}
+                            style={{ width: '100px' }}
                         >
-                            {weeks.map((week) => (
-                                <option key={week.week_start} value={week.week_start}>
-                                    {week.label}
+                            {years.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="form-input form-select"
+                            value={selectedWeekValue}
+                            onChange={(e) => setSelectedWeekValue(e.target.value)}
+                            style={{ width: '300px' }}
+                        >
+                            {isoWeeks.map((w) => (
+                                <option key={w.value} value={w.value}>
+                                    {w.label}
                                 </option>
                             ))}
                         </select>
@@ -204,21 +232,21 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Summary Cards - Weekly Compliance Stats */}
+            {/* Summary Cards – Weekly Compliance Stats */}
             <div className="summary-cards">
                 <SummaryCard
                     icon={Users}
                     value={complianceStats?.total_employees ?? summary?.total_employees ?? 0}
                     label="Total Employees"
                     description="All employees registered in the system."
-                    onClick={() => navigate(`/employees${selectedWeek ? `?week_start=${selectedWeek}` : ''}`)}
+                    onClick={() => navigate(`/employees${weekStartDate ? `?week_start=${weekStartDate}` : ''}`)}
                 />
                 <SummaryCard
                     icon={UserCheck}
                     value={complianceStats?.non_exempt_employees ?? 0}
                     label="Non-Exempted Employees"
                     description="WFO + Hybrid employees (excludes WFH)."
-                    onClick={() => navigate(`/employees?filter=non_exempt${selectedWeek ? `&week_start=${selectedWeek}` : ''}`)}
+                    onClick={() => navigate(`/employees?filter=non_exempt${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
                 <SummaryCard
                     icon={ShieldCheck}
@@ -226,7 +254,7 @@ export default function Dashboard() {
                     label="Compliant to WFO Policy"
                     description="Non-exempt employees meeting WFO policy (≥90%)."
                     status="green"
-                    onClick={() => navigate(`/employees?filter=compliant${selectedWeek ? `&week_start=${selectedWeek}` : ''}`)}
+                    onClick={() => navigate(`/employees?filter=compliant${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
                 <SummaryCard
                     icon={ShieldX}
@@ -234,7 +262,7 @@ export default function Dashboard() {
                     label="Non-Compliant to WFO Policy"
                     description="Non-exempt employees below WFO policy (<90%)."
                     status="red"
-                    onClick={() => navigate(`/employees?filter=non_compliant${selectedWeek ? `&week_start=${selectedWeek}` : ''}`)}
+                    onClick={() => navigate(`/employees?filter=non_compliant${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
             </div>
 
@@ -246,40 +274,46 @@ export default function Dashboard() {
                         <h3 className="chart-title">Daily Attendance (WFO vs WFH)</h3>
                         <span className="text-muted text-xs">Click bars to see details</span>
                     </div>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                            <XAxis dataKey="day" stroke="var(--color-text-muted)" fontSize={12} />
-                            <YAxis stroke="var(--color-text-muted)" fontSize={12} />
-                            <Tooltip
-                                contentStyle={{
-                                    background: 'var(--color-surface)',
-                                    border: '1px solid var(--color-border)',
-                                    borderRadius: '8px'
-                                }}
-                                cursor={{ fill: 'var(--color-bg-subtle)' }}
-                            />
-                            <Legend />
-                            <Bar
-                                dataKey="wfo"
-                                name="Work From Office"
-                                stackId="a"
-                                fill={COLORS.GREEN}
-                                radius={[0, 0, 4, 4]}
-                                onClick={(data) => handleBarClick(data, 'WFO')}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            <Bar
-                                dataKey="wfh"
-                                name="WFH / Absent"
-                                stackId="a"
-                                fill={COLORS.GRAY}
-                                radius={[4, 4, 0, 0]}
-                                onClick={(data) => handleBarClick(data, 'WFH')}
-                                style={{ cursor: 'pointer' }}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    {chartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                <XAxis dataKey="day" stroke="var(--color-text-muted)" fontSize={12} />
+                                <YAxis stroke="var(--color-text-muted)" fontSize={12} />
+                                <Tooltip
+                                    contentStyle={{
+                                        background: 'var(--color-surface)',
+                                        border: '1px solid var(--color-border)',
+                                        borderRadius: '8px'
+                                    }}
+                                    cursor={{ fill: 'var(--color-bg-subtle)' }}
+                                />
+                                <Legend />
+                                <Bar
+                                    dataKey="wfo"
+                                    name="Work From Office"
+                                    stackId="a"
+                                    fill={COLORS.GREEN}
+                                    radius={[0, 0, 4, 4]}
+                                    onClick={(data) => handleBarClick(data, 'WFO')}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                <Bar
+                                    dataKey="wfh"
+                                    name="WFH / Absent"
+                                    stackId="a"
+                                    fill={COLORS.GRAY}
+                                    radius={[4, 4, 0, 0]}
+                                    onClick={(data) => handleBarClick(data, 'WFH')}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="empty-state" style={{ padding: 'var(--spacing-8)' }}>
+                            <p className="text-muted">No attendance data for this week</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Compliance Distribution */}

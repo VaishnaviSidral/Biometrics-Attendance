@@ -28,32 +28,27 @@ export default function IndividualReport() {
     const [loading, setLoading] = useState(true);
     const [report, setReport] = useState(null);
     const [activeTab, setActiveTab] = useState('daily');
-    const [weeks, setWeeks] = useState([]);
-    const [selectedWeek, setSelectedWeek] = useState('');
-
+    // const [weeks, setWeeks] = useState([]);
+    // const [selectedWeek, setSelectedWeek] = useState('');
+    const now = new Date();
+    const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+    const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
     useEffect(() => {
         fetchData();
-    }, [code, selectedWeek]);
+    }, [code, selectedYear, selectedMonth]);    
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Fetch weeks if not loaded
-            if (weeks.length === 0) {
-                const weeksData = await api.getAvailableWeeks();
-                setWeeks(weeksData.weeks || []);
-            }
-
-            const params = {};
-            if (selectedWeek) {
-                params.start_date = selectedWeek;
-                // Find end date for this week
-                const weekObj = weeks.find(w => w.week_start === selectedWeek);
-                if (weekObj) {
-                    params.end_date = weekObj.week_end;
-                }
-            }
-
+    
+            const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+            const endDate = new Date(selectedYear, selectedMonth, 0); // last day of month
+    
+            const params = {
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0]
+            };
+    
             const data = await api.getIndividualReport(code, params);
             setReport(data);
         } catch (err) {
@@ -62,22 +57,24 @@ export default function IndividualReport() {
             setLoading(false);
         }
     };
+    
 
     const handleExport = async () => {
         try {
-            const params = {};
-            if (selectedWeek) {
-                params.start_date = selectedWeek;
-                const weekObj = weeks.find(w => w.week_start === selectedWeek);
-                if (weekObj) {
-                    params.end_date = weekObj.week_end;
-                }
-            }
+            const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+            const endDate = new Date(selectedYear, selectedMonth, 0);
+    
+            const params = {
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0]
+            };
+    
             await api.exportIndividual(code, params);
         } catch (err) {
             console.error('Export error:', err);
         }
     };
+    
 
     const dailyColumns = [
         {
@@ -109,45 +106,70 @@ export default function IndividualReport() {
                 </span>
             )
         },
-        {
-            key: 'status',
-            label: 'Status',
-            render: (value) => {
-                const colors = {
-                    PRESENT: 'green',
-                    PARTIAL: 'amber',
-                    ABSENT: 'red'
-                };
-                const labels = {
-                    PRESENT: 'Present',
-                    PARTIAL: 'Partial',
-                    ABSENT: 'Absent'
-                };
-                return (
-                    <span className={`font-medium text-${colors[value] || 'red'}`}>
-                        {labels[value] || value}
-                    </span>
-                );
-            }
-        },
+        // {
+        //     key: 'status',
+        //     label: 'Status',
+        //     render: (value) => {
+        //         const colors = {
+        //             PRESENT: 'green',
+        //             PARTIAL: 'amber',
+        //             ABSENT: 'red'
+        //         };
+        //         const labels = {
+        //             PRESENT: 'Present',
+        //             PARTIAL: 'Partial',
+        //             ABSENT: 'Absent'
+        //         };
+        //         return (
+        //             <span className={`font-medium text-${colors[value] || 'red'}`}>
+        //                 {labels[value] || value}
+        //             </span>
+        //         );
+        //     }
+        // },
         {
             key: 'daily_compliance',
             label: 'Daily Compliance',
             render: (value, row) => {
-                const statusColors = {
-                    GREEN: 'green',
-                    AMBER: 'amber',
-                    RED: 'red'
+                const normalizeStatus = (status) => {
+                    if (!status) return 'RED';
+                    const s = String(status).trim().toUpperCase();
+                
+                    const map = {
+                        GREEN: 'GREEN',
+                        AMBER: 'AMBER',
+                        RED: 'RED',
+                
+                        COMPLIANCE: 'GREEN',
+                        COMPLIANT: 'GREEN',
+                
+                        MID: 'AMBER',
+                        MID_COMPLIANCE: 'AMBER',
+                        'MID-COMPLIANCE': 'AMBER',
+                        PARTIAL: 'AMBER',
+                
+                        NON: 'RED',
+                        NON_COMPLIANCE: 'RED',
+                        'NON-COMPLIANCE': 'RED',
+                        NONCOMPLIANT: 'RED'
+                    };
+                
+                    return map[s] || 'RED';
                 };
-                const color = row.daily_status_color || 'RED';
+                
+                const rawStatus = normalizeStatus(row.daily_status_color || row.status);
+                
                 return (
                     <div className="flex items-center gap-2">
-                        <span className={`font-medium text-${statusColors[color]}`}>
+                        <span className="font-medium">
                             {value?.toFixed(1) || 0}%
                         </span>
-                        <StatusBadge status={statusColors[color]} />
+                
+                        {/* Send REAL STATUS, not color */}
+                        <StatusBadge status={rawStatus} />
                     </div>
                 );
+                
             }
         }
     ];
@@ -233,30 +255,60 @@ export default function IndividualReport() {
                 <div className="flex-1">
                     <h1 className="page-title">{report?.employee?.name}</h1>
                     <p className="page-subtitle">
-                        Employee ID: {report?.employee?.code}
-                        {report?.employee?.department && ` • ${report.employee.department}`}
+                        • Employee ID: {report?.employee?.code}
+                        {report?.employee?.work_mode && ` • Work Mode: ${report?.employee?.work_mode}`}
                     </p>
                 </div>
 
-                {/* Week Filter */}
+                {/* Year + Month Filter */}
+                <div className="flex items-center gap-4">
+
+                {/* Year */}
                 <select
                     className="form-input form-select"
-                    style={{ width: '200px' }}
-                    value={selectedWeek}
-                    onChange={(e) => setSelectedWeek(e.target.value)}
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
                 >
-                    <option value="">All History</option>
-                    {weeks.map((week) => (
-                        <option key={week.week_start} value={week.week_start}>
-                            {week.label}
+                    {Array.from({ length: 6 }, (_, i) => {
+                        const y = now.getFullYear() - i;
+                        return (
+                            <option key={y} value={y}>
+                                {y}
+                            </option>
+                        );
+                    })}
+                </select>
+
+                {/* Month */}
+                <select
+                    className="form-input form-select"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                >
+                    {[
+                        'January','February','March','April','May','June',
+                        'July','August','September','October','November','December'
+                    ].map((m, i) => (
+                        <option key={i+1} value={i+1}>
+                            {m}
                         </option>
                     ))}
                 </select>
 
+                {/* Export (optional) */}
+                {/* 
                 <button className="btn btn-primary" onClick={handleExport}>
                     <Download size={18} />
                     Export Report
-                </button>
+                </button> 
+                */}
+                </div>
+
+
+                {/* <button className="btn btn-primary" onClick={handleExport}>
+                    <Download size={18} />
+                    Export Report
+                </button> */}
             </div>
 
             {/* Summary Cards */}

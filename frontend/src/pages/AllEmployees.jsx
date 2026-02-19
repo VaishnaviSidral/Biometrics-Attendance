@@ -1,21 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import {
+    getCurrentISOWeek,
+    generateISOWeeks,
+    isoWeekToDateString,
+    getYearRange,
+    getISOYear,
+    getISOWeekNumber,
+} from '../utils/isoWeek';
 
 export default function AllEmployees() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const [loading, setLoading] = useState(true);
     const [employees, setEmployees] = useState([]);
-    const [weeks, setWeeks] = useState([]);
-    const [selectedWeek, setSelectedWeek] = useState(searchParams.get('week_start') || '');
     const [statusFilter, setStatusFilter] = useState('');
     const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
     const [sortBy, setSortBy] = useState('name');
     const [sortOrder, setSortOrder] = useState('asc');
+    const [buHeads, setBuHeads] = useState([]);
+    const [selectedBUHead, setSelectedBUHead] = useState('');
+    const [employeeBUMap, setEmployeeBUMap] = useState({}); // employee_code → bu_head
+
 
     // Work mode tab: '' = All, 'WFO', 'HYBRID', 'WFH'
     const [workModeTab, setWorkModeTab] = useState('');
@@ -23,10 +33,67 @@ export default function AllEmployees() {
     // Dashboard navigation filter: 'non_exempt', 'compliant', 'non_compliant'
     const [dashboardFilter, setDashboardFilter] = useState(searchParams.get('filter') || '');
 
+    // Calendar-based year + week
+    const currentISO = getCurrentISOWeek();
+    const urlWeekStart = searchParams.get('week_start');
+
+    // Determine initial year + week from URL or defaults
+    const [selectedYear, setSelectedYear] = useState(() => {
+        if (urlWeekStart) {
+            // URL has YYYY-MM-DD; derive year from it
+            const d = new Date(urlWeekStart + 'T00:00:00Z');
+            return d.getUTCFullYear();
+        }
+        return currentISO.year;
+    });
+
+    const [selectedWeekValue, setSelectedWeekValue] = useState(() => {
+        if (urlWeekStart) {
+            // Convert YYYY-MM-DD to nearest ISO week value
+            const d = new Date(urlWeekStart + 'T00:00:00Z');
+            const y = getISOYear(d);
+            const w = getISOWeekNumber(d);
+            return `${y}-W${String(w).padStart(2, '0')}`;
+        }
+        return `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`;
+    });
+
+    const years = useMemo(() => getYearRange(), []);
+    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+
+    // Convert ISO week to YYYY-MM-DD for API
+    const weekStartDate = useMemo(
+        () => isoWeekToDateString(selectedWeekValue),
+        [selectedWeekValue]
+    );
+
+    // Fetch data when week or sort changes
     useEffect(() => {
         fetchData();
-    }, [selectedWeek, sortBy, sortOrder]);
+    }, [weekStartDate, sortBy, sortOrder]);
 
+    useEffect(() => {
+        // Fetch BU Heads list and employee-project-BU mapping in parallel
+        api.getBUHeads()
+            .then(setBuHeads)
+            .catch(err => console.error('Error fetching BU heads:', err));
+
+        api.getEmployeesWithProjectBU()
+            .then(data => {
+                // Build map: employee_code → bu_head
+                // An employee may appear in multiple projects; take the first non-N/A
+                const map = {};
+                for (const row of data) {
+                    const code = row.employee_code;
+                    if (!map[code] || map[code] === 'N/A') {
+                        map[code] = row.bu_head || 'N/A';
+                    }
+                }
+                setEmployeeBUMap(map);
+            })
+            .catch(err => console.error('Error fetching employee BU mapping:', err));
+    }, []);
+    
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -34,12 +101,10 @@ export default function AllEmployees() {
                 sort_by: sortBy,
                 sort_order: sortOrder
             };
-
-            if (selectedWeek) params.week_start = selectedWeek;
+            if (weekStartDate) params.week_start = weekStartDate;
 
             const data = await api.getAllEmployeesReport(params);
             setEmployees(data.employees || []);
-            setWeeks(data.available_weeks || []);
         } catch (err) {
             console.error('Error fetching employees:', err);
         } finally {
@@ -50,7 +115,7 @@ export default function AllEmployees() {
     const handleExport = async () => {
         try {
             await api.exportAllEmployees({
-                week_start: selectedWeek || undefined,
+                week_start: weekStartDate || undefined,
                 work_mode: workModeTab || undefined,
                 status_filter: statusFilter || undefined,
                 sort_by: sortBy || undefined,
@@ -61,11 +126,21 @@ export default function AllEmployees() {
         }
     };
 
-    // Clear dashboard filter when user changes other filters manually
+    const handleYearChange = (newYear) => {
+        setSelectedYear(newYear);
+        if (newYear === currentISO.year) {
+            setSelectedWeekValue(
+                `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
+            );
+        } else {
+            setSelectedWeekValue(`${newYear}-W01`);
+        }
+    };
+
+    // Clear dashboard filter
     const clearDashboardFilter = () => {
         if (dashboardFilter) {
             setDashboardFilter('');
-            // Clean URL params
             const newParams = new URLSearchParams(searchParams);
             newParams.delete('filter');
             setSearchParams(newParams, { replace: true });
@@ -74,18 +149,15 @@ export default function AllEmployees() {
 
     // Filter employees based on search, status, work mode tab, and dashboard filter
     const filteredEmployees = employees.filter(emp => {
-        // Dashboard navigation filter (from dashboard cards)
+        // Dashboard navigation filter
         if (dashboardFilter) {
             const empWorkMode = (emp.work_mode || 'WFO').toUpperCase();
             if (dashboardFilter === 'non_exempt') {
-                // Show only WFO + HYBRID (not WFH)
                 if (empWorkMode === 'WFH') return false;
             } else if (dashboardFilter === 'compliant') {
-                // Show non-exempt employees with GREEN status (≥90% compliance)
                 if (empWorkMode === 'WFH') return false;
                 if (emp.status !== 'GREEN') return false;
             } else if (dashboardFilter === 'non_compliant') {
-                // Show non-exempt employees with AMBER or RED status (<90% compliance)
                 if (empWorkMode === 'WFH') return false;
                 if (emp.status === 'GREEN') return false;
             }
@@ -109,12 +181,18 @@ export default function AllEmployees() {
         // Status filter
         if (statusFilter) {
             if (statusFilter === 'compliant') {
-                return emp.status !== 'RED';
+                if (emp.status === 'RED') return false;
             } else if (statusFilter === 'RED') {
-                return emp.status === 'RED';
+                if (emp.status !== 'RED') return false;
             } else {
-                return emp.status === statusFilter;
+                if (emp.status !== statusFilter) return false;
             }
+        }
+
+        // BU Head filter
+        if (selectedBUHead) {
+            const empBU = employeeBUMap[emp.employee_code] || 'N/A';
+            if (empBU !== selectedBUHead) return false;
         }
 
         return true;
@@ -146,15 +224,28 @@ export default function AllEmployees() {
             }
         ];
 
+        const buHeadColumn = {
+            // key: 'bu_head',
+            // label: 'BU Head',
+            // sortable: false,
+            // render: (_value, row) => {
+            //     const bu = employeeBUMap[row.employee_code] || 'N/A';
+            //     return (
+            //         <span style={{
+            //             fontSize: 'var(--font-size-sm)',
+            //             color: bu === 'N/A' ? 'var(--color-text-muted)' : 'var(--color-text)'
+            //         }}>
+            //             {bu}
+            //         </span>
+            //     );
+            // }
+        };
+
         if (workModeTab === 'WFH') {
-            // WFH: Employee, Total hours, Compliance (100%), Status
             return [
                 ...baseColumns,
-                {
-                    key: 'total_office_hours',
-                    label: 'Total Hours',
-                    sortable: true
-                },
+                buHeadColumn,
+                { key: 'total_office_hours', label: 'Total Hours', sortable: true },
                 {
                     key: 'compliance_percentage',
                     label: 'Compliance',
@@ -162,10 +253,7 @@ export default function AllEmployees() {
                     render: () => (
                         <div className="flex items-center gap-3">
                             <div className="progress-bar" style={{ width: '80px' }}>
-                                <div
-                                    className="progress-fill green"
-                                    style={{ width: '100%' }}
-                                />
+                                <div className="progress-fill green" style={{ width: '100%' }} />
                             </div>
                             <span className="font-medium">100.0%</span>
                         </div>
@@ -180,16 +268,12 @@ export default function AllEmployees() {
             ];
         }
 
-        // WFO and Hybrid tabs
         const requiredDays = workModeTab === 'HYBRID' ? 3 : 5;
 
         return [
             ...baseColumns,
-            {
-                key: 'total_office_hours',
-                label: 'Total Hours',
-                sortable: true
-            },
+            buHeadColumn,
+            { key: 'total_office_hours', label: 'Total Hours', sortable: true },
             {
                 key: 'wfo_days',
                 label: 'Days',
@@ -201,11 +285,7 @@ export default function AllEmployees() {
                     </span>
                 )
             },
-            {
-                key: 'expected_hours',
-                label: 'Expected Hours',
-                sortable: false
-            },
+            { key: 'expected_hours', label: 'Expected Hours', sortable: false },
             {
                 key: 'compliance_percentage',
                 label: 'Compliance',
@@ -269,11 +349,23 @@ export default function AllEmployees() {
                 );
             }
         },
-        {
-            key: 'total_office_hours',
-            label: 'Total Hours',
-            sortable: true
-        },
+        // {
+        //     key: 'bu_head',
+        //     label: 'BU Head',
+        //     sortable: false,
+        //     render: (_value, row) => {
+        //         const bu = employeeBUMap[row.employee_code] || 'N/A';
+        //         return (
+        //             <span style={{
+        //                 fontSize: 'var(--font-size-sm)',
+        //                 color: bu === 'N/A' ? 'var(--color-text-muted)' : 'var(--color-text)'
+        //             }}>
+        //                 {bu}
+        //             </span>
+        //         );
+        //     }
+        // },
+        { key: 'total_office_hours', label: 'Total Hours', sortable: true },
         {
             key: 'wfo_days',
             label: 'Days',
@@ -285,11 +377,7 @@ export default function AllEmployees() {
                 </span>
             )
         },
-        {
-            key: 'expected_hours',
-            label: 'Expected',
-            sortable: false
-        },
+        { key: 'expected_hours', label: 'Expected', sortable: false },
         {
             key: 'compliance_percentage',
             label: 'Compliance',
@@ -316,7 +404,7 @@ export default function AllEmployees() {
 
     const columns = workModeTab ? getColumns() : allColumns;
 
-    // Dashboard filter label for display
+    // Dashboard filter label
     const dashboardFilterLabels = {
         'non_exempt': 'Non-Exempted Employees (WFO + Hybrid)',
         'compliant': 'Compliant to WFO Policy (≥90%)',
@@ -361,7 +449,7 @@ export default function AllEmployees() {
             <div className="card mb-6">
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                     gap: 'var(--spacing-4)',
                     alignItems: 'end'
                 }}>
@@ -391,18 +479,31 @@ export default function AllEmployees() {
                         </div>
                     </div>
 
+                    {/* Year Filter */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Year</label>
+                        <select
+                            className="form-input form-select"
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(Number(e.target.value))}
+                        >
+                            {years.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* Week Filter */}
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Week</label>
                         <select
                             className="form-input form-select"
-                            value={selectedWeek}
-                            onChange={(e) => setSelectedWeek(e.target.value)}
+                            value={selectedWeekValue}
+                            onChange={(e) => setSelectedWeekValue(e.target.value)}
                         >
-                            <option value="">Latest Week</option>
-                            {weeks.map((week) => (
-                                <option key={week.week_start} value={week.week_start}>
-                                    {week.label}
+                            {isoWeeks.map((w) => (
+                                <option key={w.value} value={w.value}>
+                                    {w.label}
                                 </option>
                             ))}
                         </select>
@@ -417,11 +518,44 @@ export default function AllEmployees() {
                             onChange={(e) => setStatusFilter(e.target.value)}
                         >
                             <option value="">All Status</option>
-                            <option value="GREEN">Compliance (&ge;90%)</option>
+                            <option value="GREEN">Compliance (≥90%)</option>
                             <option value="AMBER">Mid-Compliance (60-89%)</option>
                             <option value="RED">Non-Compliance (&lt;60%)</option>
                         </select>
                     </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">BU Head</label>
+                        <select
+                            className="form-input form-select"
+                            value={selectedBUHead}
+                            onChange={(e) => setSelectedBUHead(e.target.value)}
+                        >
+                            <option value="">All BU Heads</option>
+                            {buHeads.map((bu) => (
+                                <option key={bu} value={bu}>{bu}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Export Button */}
+                    <div style={{ display: "flex", alignItems: "end" }}>
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleExport}
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                width: "fit-content",
+                                whiteSpace: "nowrap",
+                                padding: "10px 14px"
+                            }}
+                        >
+                            <Download size={18} />
+                            Export CSV
+                        </button>
+                    </div>
+
                 </div>
             </div>
 
@@ -454,7 +588,7 @@ export default function AllEmployees() {
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-green)' }}>
                         {filteredEmployees.filter(e => e.compliance_percentage >= 90).length}
                     </div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliance (&ge;90%)</div>
+                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliance (≥90%)</div>
                 </div>
 
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-red-bg)', borderColor: 'var(--color-status-red-border)' }}>
@@ -503,10 +637,7 @@ export default function AllEmployees() {
                         {filteredEmployees.length} Employee{filteredEmployees.length !== 1 ? 's' : ''}
                         {workModeTab && ` (${workModeTab})`}
                     </h3>
-                    <button className="btn btn-primary" onClick={handleExport}>
-                        <Download size={18} />
-                        Export CSV
-                    </button>
+                   
                 </div>
                 <DataTable
                     columns={columns}

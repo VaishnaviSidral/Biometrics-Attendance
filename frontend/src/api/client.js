@@ -203,19 +203,42 @@ export const api = {
         return [];
     },
 
-    exportMonthlyReport: async (params = {}) => {
+    exportMonthlyReportCSV: async (params = {}) => {
         const searchParams = new URLSearchParams();
         if (params.month) searchParams.set('month', params.month);
         if (params.search) searchParams.set('search', params.search);
+    
         const blob = await request(`/reports/monthly-report/export?${searchParams}`);
-        downloadBlob(blob, `monthly_report_${params.month || 'all'}.csv`);
+    
+        let filename = "monthly_report.csv";
+    
+        if (params.month) {
+            const [year, m] = params.month.split("-");
+            const monthName = new Date(params.month + "-01")
+                .toLocaleDateString("en-US", { month: "long" })
+                .toLowerCase();
+    
+            filename = `monthly_report_${monthName}_${year}.csv`;
+        }
+    
+        downloadBlob(blob, filename);
     },
+    
 
     exportMonthlyIndividual: async (employeeCode, month) => {
         const blob = await request(`/reports/monthly-report/export/${employeeCode}?month=${month}`);
         downloadBlob(blob, `${employeeCode}_${month}_report.csv`);
     },
-    
+    // BU Head (Redmine integration)
+    getBUHeads: () => request('/employees/bu-heads/list'),
+
+    getEmployeesWithProjectBU: () => request('/employees/with-project-bu'),
+
+    getEmployeesByBUHead: (buHead) => {
+        const searchParams = new URLSearchParams({ bu_head: buHead });
+        return request(`/employees/by-bu-head?${searchParams}`);
+    },
+
     // Exports
     exportAllEmployees: async (filters = {}) => {
         const searchParams = new URLSearchParams();

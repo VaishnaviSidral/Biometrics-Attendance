@@ -1,38 +1,94 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Calendar, Clock, Building2, TrendingUp } from 'lucide-react';
 import api from '../api/client';
+import {
+    getCurrentISOWeek,
+    generateISOWeeks,
+    isoWeekToDateString,
+    getPreviousISOWeeks,
+    parseISOWeek,
+    getYearRange,
+} from '../utils/isoWeek';
 
 export default function EmployeeDashboard() {
     const { user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [data, setData] = useState(null);
-    const [selectedWeek, setSelectedWeek] = useState('');
     const [error, setError] = useState(null);
 
-    useEffect(() => {
-        fetchWeeklyCompliance();
-    }, [selectedWeek]);
+    // Calendar-based year + week
+    const currentISO = getCurrentISOWeek();
+    const [selectedYear, setSelectedYear] = useState(currentISO.year);
+    const [selectedWeekValue, setSelectedWeekValue] = useState(
+        `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
+    );
 
-    const fetchWeeklyCompliance = async () => {
+    const years = useMemo(() => getYearRange(), []);
+    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+
+    // Last 5 weeks (calendar-calculated, cross-year safe)
+    const last5Weeks = useMemo(() => getPreviousISOWeeks(selectedWeekValue, 5), [selectedWeekValue]);
+
+    // State for last-5-week API results
+    const [weeksSummaryData, setWeeksSummaryData] = useState({});
+
+    const weekStartDate = useMemo(
+        () => isoWeekToDateString(selectedWeekValue),
+        [selectedWeekValue]
+    );
+
+    // Fetch selected week's data when week changes
+    useEffect(() => {
+        if (weekStartDate) {
+            fetchWeeklyCompliance(weekStartDate);
+        }
+    }, [weekStartDate]);
+
+    // Fetch last 5 weeks data when selection changes
+    useEffect(() => {
+        if (last5Weeks.length > 0) {
+            fetchLast5Weeks();
+        }
+    }, [last5Weeks.join(',')]);
+
+    const fetchWeeklyCompliance = async (dateStr) => {
         try {
             setLoading(true);
             setError(null);
-            const params = {};
-            if (selectedWeek) params.week_start = selectedWeek;
-
-            const response = await api.getEmployeeWeeklyCompliance(params);
+            const response = await api.getEmployeeWeeklyCompliance({ week_start: dateStr });
             setData(response);
-
-            // Set default week if not yet selected
-            if (!selectedWeek && response.selected_week?.week_start) {
-                setSelectedWeek(response.selected_week.week_start);
-            }
         } catch (err) {
             console.error('Error fetching weekly compliance:', err);
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchLast5Weeks = async () => {
+        const results = {};
+        for (const wk of last5Weeks) {
+            const dateStr = isoWeekToDateString(wk);
+            if (!dateStr) continue;
+            try {
+                const resp = await api.getEmployeeWeeklyCompliance({ week_start: dateStr });
+                results[wk] = resp?.selected_week || null;
+            } catch {
+                results[wk] = null;
+            }
+        }
+        setWeeksSummaryData(results);
+    };
+
+    const handleYearChange = (newYear) => {
+        setSelectedYear(newYear);
+        if (newYear === currentISO.year) {
+            setSelectedWeekValue(
+                `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
+            );
+        } else {
+            setSelectedWeekValue(`${newYear}-W01`);
         }
     };
 
@@ -64,7 +120,7 @@ export default function EmployeeDashboard() {
                 <div className="empty-state" style={{ padding: 'var(--spacing-8)' }}>
                     <h2 className="empty-state-title">Unable to load data</h2>
                     <p className="empty-state-text">{error}</p>
-                    <button className="btn btn-primary" onClick={fetchWeeklyCompliance}>
+                    <button className="btn btn-primary" onClick={() => fetchWeeklyCompliance(weekStartDate)}>
                         Retry
                     </button>
                 </div>
@@ -74,9 +130,32 @@ export default function EmployeeDashboard() {
 
     const week = data?.selected_week || {};
     const dailyRecords = week.daily || [];
-    const weeksSummary = data?.weeks_summary || [];
-    const availableWeeks = data?.available_weeks || [];
     const statusColor = getStatusColor(week.status);
+    const selectedWeekObj = isoWeeks.find(w => w.value === selectedWeekValue);
+
+    // Build last 5 weeks rows (calendar-driven, with API data if available)
+    const last5WeeksRows = last5Weeks.map((wk) => {
+        const wkObj = (() => {
+            const p = parseISOWeek(wk);
+            if (!p) return null;
+            const allWeeks = generateISOWeeks(p.year);
+            return allWeeks.find(w => w.value === wk);
+        })();
+
+        const apiData = weeksSummaryData[wk];
+
+        return {
+            weekValue: wk,
+            weekLabel: wkObj?.label || wk,
+            weekStart: wkObj?.weekStart || isoWeekToDateString(wk),
+            totalHours: apiData?.total_hours || '0h 00m',
+            totalMinutes: apiData?.total_minutes || 0,
+            wfoDays: apiData?.wfo_days || 0,
+            requiredDays: apiData?.required_days || 0,
+            compliancePercentage: apiData?.compliance_percentage ?? 0,
+            status: apiData?.status || 'RED',
+        };
+    });
 
     return (
         <div className="employee-dashboard">
@@ -93,29 +172,35 @@ export default function EmployeeDashboard() {
                 </div>
             </div>
 
-            {/* Week Filter */}
+            {/* Year + Week Filter */}
             <div className="employee-filter-section">
-                <div className="employee-filters">
+                <div className="employee-filters" style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--spacing-3)' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label htmlFor="week" className="form-label">
+                        <label className="form-label">
                             <Calendar size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
-                            Select Week:
+                            Year
                         </label>
                         <select
-                            id="week"
                             className="form-input form-select"
-                            value={selectedWeek}
-                            onChange={(e) => setSelectedWeek(e.target.value)}
-                            style={{ minWidth: '240px' }}
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(Number(e.target.value))}
+                            style={{ minWidth: '100px' }}
                         >
-                            {/* Current week option (always present) */}
-                            {!availableWeeks.find(w => w.week_start === selectedWeek) && selectedWeek && (
-                                <option value={selectedWeek}>
-                                    Current Week ({week.week_label || selectedWeek})
-                                </option>
-                            )}
-                            {availableWeeks.map((w) => (
-                                <option key={w.week_start} value={w.week_start}>
+                            {years.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Week</label>
+                        <select
+                            className="form-input form-select"
+                            value={selectedWeekValue}
+                            onChange={(e) => setSelectedWeekValue(e.target.value)}
+                            style={{ minWidth: '300px' }}
+                        >
+                            {isoWeeks.map((w) => (
+                                <option key={w.value} value={w.value}>
                                     {w.label}
                                 </option>
                             ))}
@@ -145,7 +230,10 @@ export default function EmployeeDashboard() {
                 <div className="card" style={{ padding: 'var(--spacing-4)', textAlign: 'center' }}>
                     <Building2 size={24} style={{ margin: '0 auto var(--spacing-2)', color: '#8b5cf6' }} />
                     <div style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'bold' }}>
-                        {week.wfo_days || 0} <span className="text-muted" style={{ fontSize: 'var(--font-size-base)', fontWeight: 400 }}>/ {week.required_days || 0}</span>
+                        {week.wfo_days || 0}{' '}
+                        <span className="text-muted" style={{ fontSize: 'var(--font-size-base)', fontWeight: 400 }}>
+                            / {week.required_days || 0}
+                        </span>
                     </div>
                     <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
                         WFO Days
@@ -185,7 +273,7 @@ export default function EmployeeDashboard() {
             {/* Daily Breakdown Table */}
             <div className="employee-table-container" style={{ marginBottom: 'var(--spacing-6)' }}>
                 <h3 style={{ padding: 'var(--spacing-4) var(--spacing-4) 0', fontWeight: 600 }}>
-                    Daily Breakdown — {week.week_label || ''}
+                    Daily Breakdown — {selectedWeekObj?.label || selectedWeekValue}
                 </h3>
                 <table className="employee-table">
                     <thead>
@@ -195,7 +283,7 @@ export default function EmployeeDashboard() {
                             <th>FIRST IN</th>
                             <th>LAST OUT</th>
                             <th>TOTAL HOURS</th>
-                            <th>STATUS</th>
+                            {/* <th>STATUS</th> */}
                         </tr>
                     </thead>
                     <tbody>
@@ -229,7 +317,7 @@ export default function EmployeeDashboard() {
                                                 {record.total_hours}
                                             </span>
                                         </td>
-                                        <td>
+                                        {/* <td>
                                             {isWeekend ? (
                                                 <span style={{
                                                     padding: '2px 8px', borderRadius: '999px',
@@ -249,7 +337,7 @@ export default function EmployeeDashboard() {
                                                     background: '#fecaca', color: '#dc2626'
                                                 }}>Absent</span>
                                             )}
-                                        </td>
+                                        </td> */}
                                     </tr>
                                 );
                             })
@@ -264,74 +352,76 @@ export default function EmployeeDashboard() {
                 </table>
             </div>
 
-            {/* Last 5 Weeks Summary */}
-            {weeksSummary.length > 0 && (
-                <div className="employee-table-container">
-                    <h3 style={{ padding: 'var(--spacing-4) var(--spacing-4) 0', fontWeight: 600 }}>
-                        Weekly Compliance Summary (Last 5 Weeks)
-                    </h3>
-                    <table className="employee-table">
-                        <thead>
-                            <tr>
-                                <th>WEEK</th>
-                                <th>TOTAL HOURS</th>
-                                <th>WFO DAYS</th>
-                                <th>COMPLIANCE</th>
-                                <th>STATUS</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {weeksSummary.map((ws, index) => {
-                                const wsColor = getStatusColor(ws.status);
-                                return (
-                                    <tr
-                                        key={index}
-                                        onClick={() => setSelectedWeek(ws.week_start)}
-                                        style={{
-                                            cursor: 'pointer',
-                                            background: ws.week_start === selectedWeek ? 'var(--color-bg-subtle)' : undefined
-                                        }}
-                                    >
-                                        <td style={{ fontWeight: ws.week_start === selectedWeek ? 600 : 400 }}>
-                                            {ws.week_label}
-                                        </td>
-                                        <td>{ws.total_hours}</td>
-                                        <td>
-                                            {ws.wfo_days} <span className="text-muted">/ {ws.required_days}</span>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <div style={{
-                                                    width: '60px', height: '6px',
-                                                    borderRadius: '3px', background: '#e2e8f0'
-                                                }}>
-                                                    <div style={{
-                                                        width: `${Math.min(ws.compliance_percentage, 100)}%`,
-                                                        height: '100%', borderRadius: '3px',
-                                                        background: wsColor.text
-                                                    }} />
-                                                </div>
-                                                <span style={{ fontWeight: 600, fontSize: '13px' }}>
-                                                    {ws.compliance_percentage.toFixed(1)}%
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span style={{
-                                                padding: '4px 10px', borderRadius: '999px',
-                                                fontSize: '12px', fontWeight: 600,
-                                                background: wsColor.bg, color: wsColor.text
+            {/* Last 5 Weeks Summary (calendar-calculated) */}
+            <div className="employee-table-container">
+                <h3 style={{ padding: 'var(--spacing-4) var(--spacing-4) 0', fontWeight: 600 }}>
+                    Weekly Compliance Summary (Previous 5 Weeks)
+                </h3>
+                <table className="employee-table">
+                    <thead>
+                        <tr>
+                            <th>WEEK</th>
+                            <th>TOTAL HOURS</th>
+                            <th>WFO DAYS</th>
+                            <th>COMPLIANCE</th>
+                            <th>STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {last5WeeksRows.map((ws, index) => {
+                            const wsColor = getStatusColor(ws.status);
+                            return (
+                                <tr
+                                    key={index}
+                                    onClick={() => {
+                                        const p = parseISOWeek(ws.weekValue);
+                                        if (p) {
+                                            setSelectedYear(p.year);
+                                            setSelectedWeekValue(ws.weekValue);
+                                        }
+                                    }}
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <td style={{ fontWeight: 400 }}>
+                                        {ws.weekLabel}
+                                    </td>
+                                    <td>{ws.totalHours}</td>
+                                    <td>
+                                        {ws.wfoDays}{' '}
+                                        <span className="text-muted">/ {ws.requiredDays}</span>
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{
+                                                width: '60px', height: '6px',
+                                                borderRadius: '3px', background: '#e2e8f0'
                                             }}>
-                                                {getStatusLabel(ws.status)}
+                                                <div style={{
+                                                    width: `${Math.min(ws.compliancePercentage, 100)}%`,
+                                                    height: '100%', borderRadius: '3px',
+                                                    background: wsColor.text
+                                                }} />
+                                            </div>
+                                            <span style={{ fontWeight: 600, fontSize: '13px' }}>
+                                                {ws.compliancePercentage.toFixed(1)}%
                                             </span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span style={{
+                                            padding: '4px 10px', borderRadius: '999px',
+                                            fontSize: '12px', fontWeight: 600,
+                                            background: wsColor.bg, color: wsColor.text
+                                        }}>
+                                            {getStatusLabel(ws.status)}
+                                        </span>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }

@@ -177,7 +177,6 @@ async def export_monthly_report_csv(
     writer.writerow([
         "Emp Code",
         "Emp Name",
-        "Department",
         "Work Mode",
         "Exempted",
         "Total WFO Days",
@@ -190,7 +189,6 @@ async def export_monthly_report_csv(
         writer.writerow([
             row["employee_code"],
             row["employee_name"],
-            row["department"] or "",
             row["work_mode"],
             "YES" if row["exempted"] else "NO",
             row["total_wfo_days"],

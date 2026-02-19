@@ -244,10 +244,11 @@ class ReportGenerator:
         weekly_query = self.db.query(WeeklySummary).filter(
             WeeklySummary.employee_code == employee_code
         )
-        if start_date:
-            weekly_query = weekly_query.filter(WeeklySummary.week_start >= start_date)
-        if end_date:
-            weekly_query = weekly_query.filter(WeeklySummary.week_end <= end_date)
+        if start_date and end_date:
+            weekly_query = weekly_query.filter(
+                WeeklySummary.week_start <= end_date,
+                WeeklySummary.week_end >= start_date
+            )
 
         weekly_summaries = weekly_query.order_by(WeeklySummary.week_start.desc()).all()
 
@@ -460,20 +461,24 @@ class ReportGenerator:
         threshold_amber = self.dynamic_settings['threshold_amber']  # GREEN threshold (90%)
 
         compliant = 0
+        mid_compliant = 0
         non_compliant = 0
 
         for emp in non_exempt_employees:
             summary = summaries.get(emp.code)
+
             if summary:
-                work_mode = (emp.work_mode or 'WFO').upper()
-                mode_config = self.work_mode_config.get(work_mode, self.work_mode_config['WFO'])
                 compliance = min(summary.compliance_percentage, 100.0)
-                if compliance >= threshold_amber:  # GREEN = compliant to WFO policy
-                    compliant += 1
+
+                if compliance >= 90:
+                    compliant += 1                    # GREEN
+                elif compliance >= 60:
+                    mid_compliant += 1                # AMBER
                 else:
-                    non_compliant += 1
+                    non_compliant += 1                # RED
             else:
-                non_compliant += 1  # No data for this week = non-compliant
+                non_compliant += 1                    # No data = non-compliant
+
 
         week_end = week_start + timedelta(days=6)
 
@@ -481,6 +486,7 @@ class ReportGenerator:
             'total_employees': total,
             'non_exempt_employees': non_exempt_count,
             'compliant_employees': compliant,
+            'partial_compliant_employees': mid_compliant,
             'non_compliant_employees': non_compliant,
             'week_start': week_start.isoformat(),
             'week_end': week_end.isoformat()

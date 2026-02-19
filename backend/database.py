@@ -6,7 +6,7 @@ Redmine DB = READ ONLY (user validation only)
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from config import settings as cfg_settings
+from config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 # ============================================================
 # Biometric DB (READ/WRITE) - Main application database
 # ============================================================
-if cfg_settings.DATABASE_URL.startswith('mysql'):
+if settings.DATABASE_URL.startswith('mysql'):
     engine = create_engine(
-        cfg_settings.DATABASE_URL,
+        settings.DATABASE_URL,
         pool_pre_ping=True,
         pool_recycle=3600,
         pool_size=10,
@@ -24,7 +24,7 @@ if cfg_settings.DATABASE_URL.startswith('mysql'):
     )
 else:
     engine = create_engine(
-        cfg_settings.DATABASE_URL,
+        settings.DATABASE_URL,
         connect_args={"check_same_thread": False}
     )
 
@@ -45,7 +45,7 @@ def get_db():
 # Redmine DB (READ ONLY) - User validation only
 # ============================================================
 redmine_engine = create_engine(
-    cfg_settings.REDMINE_DATABASE_URL,
+    settings.REDMINE_DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=3600,
     pool_size=5,
