@@ -152,24 +152,26 @@ async def get_available_weeks(
 async def get_monthly_report(
     month: str = Query(..., description="Month in YYYY-MM format"),
     search: Optional[str] = Query(None, description="Search by employee name or code"),
+    work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID, WFH"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin)
 ):
     """Admin Monthly Report — presence-based, day-based compliance"""
     generator = ReportGenerator(db)
-    return generator.get_monthly_report(month=month, search=search)
+    return generator.get_monthly_report(month=month, search=search, work_mode=work_mode)
 
 
 @router.get("/monthly-report/export")
 async def export_monthly_report_csv(
     month: str = Query(..., description="Month in YYYY-MM format"),
     search: Optional[str] = Query(None, description="Search by employee name or code"),
+    work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin)
 ):
     """Export monthly report as CSV"""
     generator = ReportGenerator(db)
-    data = generator.get_monthly_report(month=month, search=search)
+    data = generator.get_monthly_report(month=month, search=search, work_mode=work_mode)
 
     output = io.StringIO()
     writer = csv.writer(output)

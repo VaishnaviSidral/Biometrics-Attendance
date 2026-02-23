@@ -193,14 +193,19 @@ async def upload_attendance_file(
                 )
             ).all()
 
-            # Build daily_summaries dict from DB records
+            # Build daily_summaries dict from DB records (EXCLUDE SAT/SUN)
             db_daily_summaries = {}
             for rec in db_daily_records:
+                # weekday(): Mon=0 ... Sun=6
+                if rec.date.weekday() >= 5:
+                    continue   # ❌ skip Saturday & Sunday
+
                 if rec.employee_code not in db_daily_summaries:
                     db_daily_summaries[rec.employee_code] = {}
+
                 db_daily_summaries[rec.employee_code][rec.date] = {
                     'total_office_minutes': rec.total_office_minutes,
-                    'status': rec.status.value  # e.g. "PRESENT", "ABSENT"
+                    'status': rec.status.value
                 }
 
             # Calculate weekly summary from complete DB data

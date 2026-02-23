@@ -231,15 +231,7 @@ class ReportGenerator:
             query = query.filter(DailyAttendance.date <= end_date)
 
         daily_records = query.order_by(DailyAttendance.date.desc()).all()
-        print("\n====== DEBUG: DAILY RECORDS FETCHED ======")
-        print("EMP:", employee_code)
-        for r in daily_records:
-            print("DATE:", r.date,
-                "| MINUTES:", r.total_office_minutes,
-                "| FIRST_IN:", r.first_in,
-                "| LAST_OUT:", r.last_out,
-                "| DB_STATUS:", getattr(r.status, "value", r.status))
-        print("========================================\n")
+        
         # Filter weekly summaries by date range too
         weekly_query = self.db.query(WeeklySummary).filter(
             WeeklySummary.employee_code == employee_code
@@ -274,11 +266,6 @@ class ReportGenerator:
                 daily_compliance = 100.0 if mode_config.get('always_compliant') else 0
 
             daily_status_color = get_status_color(daily_compliance)
-            print("DEBUG LOOP ->",
-                "DATE:", record.date,
-                "| MINUTES:", record.total_office_minutes,
-                "| CALC_STATUS:",
-                "PRESENT" if record.total_office_minutes > 0 else "ABSENT")
 
             daily_data.append({
                 'date': record.date.isoformat(),
@@ -588,12 +575,13 @@ class ReportGenerator:
                 })
         return result
 
-    def get_monthly_report(self, month: str, search: Optional[str] = None):
+    def get_monthly_report(self, month: str, search: Optional[str] = None, work_mode: Optional[str] = None):
         """
         Month format: YYYY-MM
         Compliance logic = DAY BASED using dynamic settings.
         Shows ALL employees (even those with 0 attendance records).
         Search filters by employee name or code (ILIKE).
+        work_mode filters by employee work mode (WFO, HYBRID, WFH).
         """
         import calendar as cal_mod
 
@@ -623,7 +611,7 @@ class ReportGenerator:
         wfo_required = round(weeks_in_month * wfo_days_per_week)
         hybrid_required = round(weeks_in_month * hybrid_days_per_week)
 
-        # Get all employees (optionally filtered by search)
+        # Get all employees (optionally filtered by search and work_mode)
         emp_query = self.db.query(Employee)
 
         if search:
@@ -632,6 +620,8 @@ class ReportGenerator:
                 (Employee.name.ilike(search_term)) |
                 (Employee.code.ilike(search_term))
             )
+        if work_mode:
+            emp_query = emp_query.filter(Employee.work_mode.ilike(work_mode))
         all_employees = emp_query.order_by(Employee.name).all()
 
         # Get all daily attendance records for this month

@@ -193,6 +193,7 @@ export const api = {
         const searchParams = new URLSearchParams();
         if (params.month) searchParams.set('month', params.month);
         if (params.search) searchParams.set('search', params.search);
+        if (params.work_mode) searchParams.set('work_mode', params.work_mode);
         const res = await request(`/reports/monthly-report?${searchParams}`);
 
         // handle both cases safely
@@ -207,23 +208,24 @@ export const api = {
         const searchParams = new URLSearchParams();
         if (params.month) searchParams.set('month', params.month);
         if (params.search) searchParams.set('search', params.search);
-    
+        if (params.work_mode) searchParams.set('work_mode', params.work_mode);
+
         const blob = await request(`/reports/monthly-report/export?${searchParams}`);
-    
+
         let filename = "monthly_report.csv";
-    
+
         if (params.month) {
             const [year, m] = params.month.split("-");
             const monthName = new Date(params.month + "-01")
                 .toLocaleDateString("en-US", { month: "long" })
                 .toLowerCase();
-    
-            filename = `monthly_report_${monthName}_${year}.csv`;
+            const modeLabel = params.work_mode ? `_${params.work_mode.toLowerCase()}` : '';
+            filename = `monthly_report${modeLabel}_${monthName}_${year}.csv`;
         }
-    
+
         downloadBlob(blob, filename);
     },
-    
+
 
     exportMonthlyIndividual: async (employeeCode, month) => {
         const blob = await request(`/reports/monthly-report/export/${employeeCode}?month=${month}`);

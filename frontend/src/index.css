@@ -245,6 +245,61 @@ body {
   height: 20px;
 }
 
+/* Nav Group (collapsible parent + submenu) */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-item-toggle {
+  width: 100%;
+  border: none;
+  background: none;
+  font-family: inherit;
+  position: relative;
+}
+
+.nav-chevron {
+  margin-left: auto;
+  opacity: 0.5;
+  transition: transform var(--transition-base), opacity var(--transition-base);
+}
+
+.nav-item-toggle:hover .nav-chevron {
+  opacity: 1;
+}
+
+/* Submenu */
+.nav-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding-left: var(--spacing-6);
+  margin-top: var(--spacing-1);
+  animation: submenu-slide-in 0.2s ease;
+}
+
+.nav-submenu-item {
+  font-size: var(--font-size-xs) !important;
+  padding: var(--spacing-2) var(--spacing-3) !important;
+}
+
+.nav-submenu-item .nav-item-icon {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes submenu-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Header */
 .header {
   position: fixed;

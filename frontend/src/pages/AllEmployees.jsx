@@ -198,6 +198,21 @@ export default function AllEmployees() {
         return true;
     });
 
+    // Avg Compliance excluding WFH
+    const avgCompliance = (() => {
+        const eligible = filteredEmployees.filter(
+            emp => (emp.work_mode || 'WFO') !== 'WFH'
+        );
+
+        if (!eligible.length) return '0.0';
+
+        const total = eligible.reduce(
+            (acc, emp) => acc + (emp.compliance_percentage || 0),
+            0
+        );
+
+        return (total / eligible.length).toFixed(1);
+    })();
     // Work mode counts
     const wfoCount = employees.filter(e => (e.work_mode || 'WFO') === 'WFO').length;
     const hybridCount = employees.filter(e => (e.work_mode || 'WFO') === 'HYBRID').length;
@@ -578,10 +593,10 @@ export default function AllEmployees() {
                 </div>
 
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)' }}>
-                    <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                        {(filteredEmployees.reduce((acc, emp) => acc + emp.compliance_percentage, 0) / (filteredEmployees.length || 1)).toFixed(1)}%
-                    </div>
-                    <div className="text-muted">Avg Compliance</div>
+                <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                    {avgCompliance}%
+                </div>
+                <div className="text-muted">Avg Compliance (WFO + Hybrid only)</div>
                 </div>
 
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-green-bg)', borderColor: 'var(--color-status-green-border)' }}>

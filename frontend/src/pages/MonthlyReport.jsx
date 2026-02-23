@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, Search, Calendar } from "lucide-react";
 import api from "../api/client";
 
-export default function MonthlyReport() {
+export default function MonthlyReport({ workMode }) {
     const [month, setMonth] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -28,12 +28,13 @@ export default function MonthlyReport() {
         if (month) {
             fetchData();
         }
-    }, [month, debouncedSearch]);
+    }, [month, debouncedSearch, workMode]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            const params = { month, search: debouncedSearch }; // always include search
+            const params = { month, search: debouncedSearch };
+            if (workMode) params.work_mode = workMode;
             const res = await api.getMonthlyReport(params);
             setData(res || []);
         } catch (err) {
@@ -45,22 +46,22 @@ export default function MonthlyReport() {
     const handleExportCSV = async () => {
         try {
             if (!month) return;
-    
+
             // month = "2026-02"
             const [year, m] = month.split("-");
             const monthName = new Date(month + "-01").toLocaleDateString("en-US", { month: "long" }).toLowerCase();
-    
+
             const filename = `monthly_report_${monthName}_${year}.csv`;
-    
+
             await api.exportMonthlyReportCSV(
-                { month, search: debouncedSearch },
+                { month, search: debouncedSearch, work_mode: workMode },
                 filename
             );
         } catch (err) {
             console.error("Monthly export error:", err);
         }
     };
-    
+
 
     const handleIndividualExport = async (employeeCode) => {
         try {
@@ -85,7 +86,7 @@ export default function MonthlyReport() {
         <div className="animate-fade-in">
             {/* Page Header */}
             <div className="page-header">
-                <h1 className="page-title">Monthly Attendance Report</h1>
+                <h1 className="page-title">{workMode ? `${workMode} Monthly Attendance Report` : 'Monthly Attendance Report'}</h1>
                 <p className="page-subtitle">
                     {monthLabel
                         ? `${monthLabel} — ${workingDays} working days`

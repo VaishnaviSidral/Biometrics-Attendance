@@ -22,7 +22,8 @@ function Layout() {
       '/': 'Dashboard',
       '/upload': 'Upload Data',
       '/employees': 'All Employees',
-      '/monthly-report': 'Monthly Report',
+      '/monthly-report/wfo': 'Monthly Report — WFO',
+      '/monthly-report/hybrid': 'Monthly Report — Hybrid',
       '/settings': 'Settings',
       '/employee-dashboard': 'My Attendance'
     };
@@ -83,9 +84,21 @@ function Layout() {
           />
           <Route
             path="/monthly-report"
+            element={<Navigate to="/monthly-report/wfo" replace />}
+          />
+          <Route
+            path="/monthly-report/wfo"
             element={
               <ProtectedRoute requireAdmin>
-                <MonthlyReport />
+                <MonthlyReport workMode="WFO" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/monthly-report/hybrid"
+            element={
+              <ProtectedRoute requireAdmin>
+                <MonthlyReport workMode="HYBRID" />
               </ProtectedRoute>
             }
           />
