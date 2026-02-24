@@ -4,6 +4,7 @@ import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
+import { useViewWeekDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -16,7 +17,9 @@ import {
 export default function AllEmployees() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    const { weekYear, weekValue, setWeekYear, setWeekValue } = useViewWeekDate('allEmployees');
     const [loading, setLoading] = useState(true);
+    const [complianceSettings, setComplianceSettings] = useState(null);
     const [employees, setEmployees] = useState([]);
     const [statusFilter, setStatusFilter] = useState('');
     const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
@@ -33,30 +36,25 @@ export default function AllEmployees() {
     // Dashboard navigation filter: 'non_exempt', 'compliant', 'non_compliant'
     const [dashboardFilter, setDashboardFilter] = useState(searchParams.get('filter') || '');
 
-    // Calendar-based year + week
+    // Calendar-based year + week (from global context)
     const currentISO = getCurrentISOWeek();
     const urlWeekStart = searchParams.get('week_start');
 
-    // Determine initial year + week from URL or defaults
-    const [selectedYear, setSelectedYear] = useState(() => {
+    // On mount, if URL has week_start, sync to context
+    useEffect(() => {
         if (urlWeekStart) {
-            // URL has YYYY-MM-DD; derive year from it
-            const d = new Date(urlWeekStart + 'T00:00:00Z');
-            return d.getUTCFullYear();
-        }
-        return currentISO.year;
-    });
-
-    const [selectedWeekValue, setSelectedWeekValue] = useState(() => {
-        if (urlWeekStart) {
-            // Convert YYYY-MM-DD to nearest ISO week value
             const d = new Date(urlWeekStart + 'T00:00:00Z');
             const y = getISOYear(d);
             const w = getISOWeekNumber(d);
-            return `${y}-W${String(w).padStart(2, '0')}`;
+            setWeekYear(y);
+            setWeekValue(`${y}-W${String(w).padStart(2, '0')}`);
         }
-        return `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`;
-    });
+    }, []); // only on mount
+
+    const selectedYear = weekYear;
+    const selectedWeekValue = weekValue;
+    const setSelectedYear = setWeekYear;
+    const setSelectedWeekValue = setWeekValue;
 
     const years = useMemo(() => getYearRange(), []);
     const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
@@ -73,7 +71,7 @@ export default function AllEmployees() {
     }, [weekStartDate, sortBy, sortOrder]);
 
     useEffect(() => {
-        // Fetch BU Heads list and employee-project-BU mapping in parallel
+        // Fetch BU Heads list, employee-project-BU mapping, and compliance settings in parallel
         api.getBUHeads()
             .then(setBuHeads)
             .catch(err => console.error('Error fetching BU heads:', err));
@@ -92,6 +90,10 @@ export default function AllEmployees() {
                 setEmployeeBUMap(map);
             })
             .catch(err => console.error('Error fetching employee BU mapping:', err));
+
+        api.getSettings()
+            .then(setComplianceSettings)
+            .catch(err => console.error('Error fetching settings:', err));
     }, []);
     
     const fetchData = async () => {
@@ -217,6 +219,7 @@ export default function AllEmployees() {
     const wfoCount = employees.filter(e => (e.work_mode || 'WFO') === 'WFO').length;
     const hybridCount = employees.filter(e => (e.work_mode || 'WFO') === 'HYBRID').length;
     const wfhCount = employees.filter(e => (e.work_mode || 'WFO') === 'WFH').length;
+    const clientCount = employees.filter(e => (e.work_mode || 'CLIENT_OFFICE') === 'CLIENT_OFFICE').length;
 
     // Columns change based on work mode tab
     const getColumns = () => {
@@ -349,7 +352,7 @@ export default function AllEmployees() {
             label: 'Mode',
             sortable: true,
             render: (value) => {
-                const colors = { WFO: '#3b82f6', HYBRID: '#8b5cf6', WFH: '#06b6d4' };
+                const colors = { WFO: '#3b82f6', HYBRID: '#8b5cf6', WFH: '#06b6d4', CLIENT_OFFICE: '#f59e0b' };
                 return (
                     <span style={{
                         padding: '2px 8px',
@@ -420,10 +423,11 @@ export default function AllEmployees() {
     const columns = workModeTab ? getColumns() : allColumns;
 
     // Dashboard filter label
+    const compHrs = complianceSettings?.compliance_hours ?? 9;
     const dashboardFilterLabels = {
         'non_exempt': 'Non-Exempted Employees (WFO + Hybrid)',
-        'compliant': 'Compliant to WFO Policy (≥90%)',
-        'non_compliant': 'Non-Compliant to WFO Policy (<90%)'
+        'compliant': `Compliant to WFO Policy (≥${compHrs}h)`,
+        'non_compliant': `Non-Compliant to WFO Policy (<${compHrs}h)`
     };
 
     return (
@@ -533,9 +537,9 @@ export default function AllEmployees() {
                             onChange={(e) => setStatusFilter(e.target.value)}
                         >
                             <option value="">All Status</option>
-                            <option value="GREEN">Compliance (≥90%)</option>
-                            <option value="AMBER">Mid-Compliance (60-89%)</option>
-                            <option value="RED">Non-Compliance (&lt;60%)</option>
+                            <option value="GREEN">Compliance</option>
+                            <option value="AMBER">Mid-Compliance</option>
+                            <option value="RED">Non-Compliance</option>
                         </select>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
@@ -601,16 +605,22 @@ export default function AllEmployees() {
 
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-green-bg)', borderColor: 'var(--color-status-green-border)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-green)' }}>
-                        {filteredEmployees.filter(e => e.compliance_percentage >= 90).length}
+                        {filteredEmployees.filter(e => {
+                            if (!workModeTab) return (e.work_mode || 'WFO') !== 'WFH' && e.status === 'GREEN';
+                            return e.status === 'GREEN';
+                        }).length}
                     </div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliance (≥90%)</div>
+                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliance (≥{complianceSettings?.compliance_hours ?? 9}h)</div>
                 </div>
 
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-red-bg)', borderColor: 'var(--color-status-red-border)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-red)' }}>
-                        {filteredEmployees.filter(e => e.compliance_percentage < 60).length}
+                    {filteredEmployees.filter(e => {
+                        if (!workModeTab) return (e.work_mode || 'WFO') !== 'WFH' && e.status === 'RED';
+                        return e.status === 'RED';
+                    }).length}
                     </div>
-                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Non-Compliance (&lt;60%)</div>
+                    <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Non-Compliance (&lt;{complianceSettings?.mid_compliance_hours ?? 7}h)</div>
                 </div>
             </div>
 
@@ -642,6 +652,13 @@ export default function AllEmployees() {
                     style={workModeTab === 'WFH' ? { borderColor: '#06b6d4', color: '#06b6d4' } : {}}
                 >
                     WFH ({wfhCount})
+                </button>
+                <button
+                    className={`tab ${workModeTab === 'Client Office' ? 'active' : ''}`}
+                    onClick={() => setWorkModeTab('CLIENT_OFFICE')}
+                    style={workModeTab === 'CLIENT_OFFICE' ? { borderColor: '#f59e0b', color: '#f59e0b' } : {}}
+                >
+                    Client Office ({clientCount})
                 </button>
             </div>
 

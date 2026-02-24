@@ -20,9 +20,9 @@ class Employee(Base):
     name = Column(String(100), nullable=False)
     email = Column(String(255), nullable=True, index=True)
     department = Column(String(50), nullable=True)
-    work_mode = Column(String(10), default='WFO')  # WFO / HYBRID / WFH
+    work_mode = Column(String(20), default='WFO')  # WFO / HYBRID / WFH
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+    status = Column(Integer, default=1)
     # Relationships
     attendance_logs = relationship("AttendanceLog", back_populates="employee")
     daily_summaries = relationship("DailyAttendance", back_populates="employee")

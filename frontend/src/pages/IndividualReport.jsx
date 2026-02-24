@@ -21,18 +21,22 @@ import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
+import { useViewMonthDate } from '../contexts/DateContext';
 
 export default function IndividualReport() {
     const { code } = useParams();
     const navigate = useNavigate();
+    const { monthYear, monthValue, setMonthYear, setMonthValue } = useViewMonthDate('individualReport');
     const [loading, setLoading] = useState(true);
     const [report, setReport] = useState(null);
     const [activeTab, setActiveTab] = useState('daily');
-    // const [weeks, setWeeks] = useState([]);
-    // const [selectedWeek, setSelectedWeek] = useState('');
+
     const now = new Date();
-    const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-    const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
+    const selectedYear = monthYear;
+    const selectedMonth = monthValue;
+    const setSelectedYear = setMonthYear;
+    const setSelectedMonth = setMonthValue;
+
     useEffect(() => {
         fetchData();
     }, [code, selectedYear, selectedMonth]);    
@@ -158,15 +162,19 @@ export default function IndividualReport() {
                 };
                 
                 const rawStatus = normalizeStatus(row.daily_status_color || row.status);
-                
+                const isWeekend = row.day === 'Saturday' || row.day === 'Sunday';
                 return (
                     <div className="flex items-center gap-2">
-                        <span className="font-medium">
-                            {value?.toFixed(1) || 0}%
-                        </span>
-                
-                        {/* Send REAL STATUS, not color */}
-                        <StatusBadge status={rawStatus} />
+                        {!isWeekend && (
+                        <>
+                            <span className="font-medium">
+                                {value?.toFixed(1) || 0}%
+                            </span>
+
+                            {/* Send REAL STATUS, not color */}
+                            <StatusBadge status={rawStatus} />
+                        </>
+                    )}
                     </div>
                 );
                 

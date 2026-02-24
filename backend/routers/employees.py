@@ -19,18 +19,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/employees", tags=["employees"])
 
 
+class EmployeeCreate(BaseModel):
+    """Employee create request"""
+    code: str
+    name: str
+    email: Optional[str] = None
+    department: Optional[str] = None
+    work_mode: str = "WFO"  # WFO / HYBRID / WFH / CLIENT_OFFICE
+    status: int = 1
+
+
 class EmployeeUpdate(BaseModel):
     """Employee update request"""
     name: Optional[str] = None
     email: Optional[str] = None
     department: Optional[str] = None
-    work_mode: Optional[str] = None  # WFO / HYBRID / WFH
+    work_mode: Optional[str] = None  # WFO / HYBRID / WFH / CLIENT_OFFICE
+    status: Optional[int] = None
 
 
 @router.get("/")
 async def list_employees(
     search: Optional[str] = Query(None, description="Search by name or code"),
-    work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID, WFH"),
+    work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID, WFH, CLIENT_OFFICE"),
+    include_inactive: bool = Query(False, description="Include inactive employees (status=0)"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
@@ -38,6 +50,9 @@ async def list_employees(
 ):
     """List all employees with optional search and work_mode filter"""
     query = db.query(Employee)
+
+    if not include_inactive:
+        query = query.filter(Employee.status == 1)
 
     if search:
         search_term = f"%{search}%"
@@ -61,10 +76,52 @@ async def list_employees(
                 "name": emp.name,
                 "email": emp.email,
                 "department": emp.department,
-                "work_mode": emp.work_mode or "WFO"
+                "work_mode": emp.work_mode or "WFO",
+                "status": emp.status if emp.status is not None else 1
             }
             for emp in employees
         ]
+    }
+
+
+@router.post("/")
+async def create_employee(
+    data: EmployeeCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Create a new employee"""
+    # Check if employee code already exists
+    existing = db.query(Employee).filter(Employee.code == data.code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Employee with code '{data.code}' already exists")
+
+    # Validate work_mode
+    valid_modes = ('WFO', 'HYBRID', 'WFH', 'CLIENT_OFFICE')
+    if data.work_mode.upper() not in valid_modes:
+        raise HTTPException(status_code=400, detail=f"work_mode must be one of: {', '.join(valid_modes)}")
+
+    employee = Employee(
+        code=data.code,
+        name=data.name,
+        email=data.email,
+        department=data.department,
+        work_mode=data.work_mode.upper(),
+        status=data.status
+    )
+
+    db.add(employee)
+    db.commit()
+    db.refresh(employee)
+
+    return {
+        "id": employee.id,
+        "code": employee.code,
+        "name": employee.name,
+        "email": employee.email,
+        "department": employee.department,
+        "work_mode": employee.work_mode or "WFO",
+        "status": employee.status if employee.status is not None else 1
     }
 
 
@@ -126,8 +183,8 @@ async def get_employees_with_project_bu(
         → redmine.custom_values (field 71) → BU Head name
     """
     try:
-        # 1) Get all biometric employees that have an email
-        employees = db.query(Employee).filter(Employee.email.isnot(None), Employee.email != '').all()
+        # 1) Get all active biometric employees that have an email
+        employees = db.query(Employee).filter(Employee.email.isnot(None), Employee.email != '', Employee.status == 1).all()
 
         if not employees:
             return []
@@ -240,8 +297,8 @@ async def get_employees_by_bu_head(
         if not matched_emails:
             return []
 
-        # 2) Find biometric employees with those emails
-        employees = db.query(Employee).filter(Employee.email.in_(matched_emails)).all()
+        # 2) Find active biometric employees with those emails
+        employees = db.query(Employee).filter(Employee.email.in_(matched_emails), Employee.status == 1).all()
 
         return [
             {
@@ -289,6 +346,7 @@ async def get_employee(
         "email": employee.email,
         "department": employee.department,
         "work_mode": employee.work_mode or "WFO",
+        "status": employee.status if employee.status is not None else 1,
         "stats": {
             "total_days_recorded": daily_count,
             "total_weeks_recorded": weekly_count
@@ -316,9 +374,11 @@ async def update_employee(
     if data.department is not None:
         employee.department = data.department
     if data.work_mode is not None:
-        if data.work_mode.upper() not in ('WFO', 'HYBRID', 'WFH'):
-            raise HTTPException(status_code=400, detail="work_mode must be WFO, HYBRID, or WFH")
+        if data.work_mode.upper() not in ('WFO', 'HYBRID', 'WFH', 'CLIENT_OFFICE'):
+            raise HTTPException(status_code=400, detail="work_mode must be WFO, HYBRID, WFH, or CLIENT_OFFICE")
         employee.work_mode = data.work_mode.upper()
+    if data.status is not None:
+        employee.status = data.status
 
     db.commit()
     db.refresh(employee)
@@ -329,5 +389,6 @@ async def update_employee(
         "name": employee.name,
         "email": employee.email,
         "department": employee.department,
-        "work_mode": employee.work_mode or "WFO"
+        "work_mode": employee.work_mode or "WFO",
+        "status": employee.status if employee.status is not None else 1
     }

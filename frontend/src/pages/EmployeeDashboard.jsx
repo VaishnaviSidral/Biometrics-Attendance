@@ -373,13 +373,13 @@ export default function EmployeeDashboard() {
                             return (
                                 <tr
                                     key={index}
-                                    onClick={() => {
-                                        const p = parseISOWeek(ws.weekValue);
-                                        if (p) {
-                                            setSelectedYear(p.year);
-                                            setSelectedWeekValue(ws.weekValue);
-                                        }
-                                    }}
+                                    // onClick={() => {
+                                    //     const p = parseISOWeek(ws.weekValue);
+                                    //     if (p) {
+                                    //         setSelectedYear(p.year);
+                                    //         setSelectedWeekValue(ws.weekValue);
+                                    //     }
+                                    // }}
                                     style={{ cursor: 'pointer' }}
                                 >
                                     <td style={{ fontWeight: 400 }}>

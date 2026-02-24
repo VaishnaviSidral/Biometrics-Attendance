@@ -29,7 +29,10 @@ export default function Settings() {
                 wfo_days_per_week: settings?.wfo_days_per_week || 5,
                 hybrid_days_per_week: settings?.hybrid_days_per_week || 3,
                 threshold_red: settings?.thresholds?.red || 60,
-                threshold_amber: settings?.thresholds?.amber || 90
+                threshold_amber: settings?.thresholds?.amber || 90,
+                compliance_hours: settings?.compliance_hours || 9,
+                mid_compliance_hours: settings?.mid_compliance_hours || 7,
+                non_compliance_hours: settings?.non_compliance_hours || 6
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
@@ -50,6 +53,9 @@ export default function Settings() {
     const wfoDays = settings?.wfo_days_per_week || 5;
     const hybridDays = settings?.hybrid_days_per_week || 3;
     const hoursPerDay = settings?.expected_hours_per_day || 9;
+    const complianceHrs = settings?.compliance_hours || 9;
+    const midComplianceHrs = settings?.mid_compliance_hours || 7;
+    const nonComplianceHrs = settings?.non_compliance_hours || 6;
 
     return (
         <div className="animate-fade-in">
@@ -173,6 +179,130 @@ export default function Settings() {
                         <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
                             Not counted in compliance
                         </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Hour-Based Compliance Thresholds */}
+            <div className="card mb-6">
+                <h3 className="card-title mb-6">Hour-Based Compliance Thresholds</h3>
+                <p style={{
+                    fontSize: 'var(--font-size-sm)',
+                    color: 'var(--color-text-muted)',
+                    marginBottom: 'var(--spacing-4)'
+                }}>
+                    Configure daily hour thresholds to determine employee compliance status.
+                    Reports update dynamically when these values change.
+                </p>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                    gap: 'var(--spacing-6)'
+                }}>
+                    <div className="form-group">
+                        <label className="form-label" style={{ color: 'var(--color-status-green)' }}>
+                            Compliance Hours (GREEN)
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={complianceHrs}
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                compliance_hours: parseInt(e.target.value)
+                            })}
+                            min="1"
+                            max="24"
+                        />
+                        <p style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--color-text-muted)',
+                            marginTop: 'var(--spacing-1)'
+                        }}>
+                            ≥ {complianceHrs}h → Employee is COMPLIANT
+                        </p>
+                    </div>
+
+                    <div className="form-group">
+                        <label className="form-label" style={{ color: '#f59e0b' }}>
+                            Mid-Compliance Hours (AMBER)
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={midComplianceHrs}
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                mid_compliance_hours: parseInt(e.target.value)
+                            })}
+                            min="1"
+                            max="24"
+                        />
+                        <p style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--color-text-muted)',
+                            marginTop: 'var(--spacing-1)'
+                        }}>
+                            ≥ {midComplianceHrs}h and &lt; {complianceHrs}h → MID-COMPLIANCE
+                        </p>
+                    </div>
+
+                    <div className="form-group">
+                        <label className="form-label" style={{ color: 'var(--color-status-red)' }}>
+                            Non-Compliance Hours (RED)
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={nonComplianceHrs}
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                non_compliance_hours: parseInt(e.target.value)
+                            })}
+                            min="0"
+                            max="24"
+                        />
+                        <p style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--color-text-muted)',
+                            marginTop: 'var(--spacing-1)'
+                        }}>
+                            &lt; {midComplianceHrs}h → NON-COMPLIANT (RED)
+                        </p>
+                    </div>
+                </div>
+
+                {/* Summary */}
+                <div style={{
+                    marginTop: 'var(--spacing-6)',
+                    padding: 'var(--spacing-4)',
+                    background: 'var(--color-surface-elevated)',
+                    borderRadius: 'var(--radius-lg)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 'var(--spacing-4)'
+                }}>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Compliance</p>
+                        <p className="font-bold" style={{ color: 'var(--color-status-green)', fontSize: 'var(--font-size-lg)' }}>
+                            ≥ {complianceHrs}h
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>GREEN status</p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Mid-Compliance</p>
+                        <p className="font-bold" style={{ color: '#f59e0b', fontSize: 'var(--font-size-lg)' }}>
+                            ≥ {midComplianceHrs}h &amp; &lt; {complianceHrs}h
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>AMBER status</p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Non-Compliance</p>
+                        <p className="font-bold" style={{ color: 'var(--color-status-red)', fontSize: 'var(--font-size-lg)' }}>
+                            &lt; {midComplianceHrs}h
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>RED status</p>
                     </div>
                 </div>
             </div>

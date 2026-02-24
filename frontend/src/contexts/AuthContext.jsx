@@ -88,6 +88,9 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
 
+        // Clear session-based date state
+        sessionStorage.clear();
+
         setToken(null);
         setUser(null);
         api.setAuthToken(null);

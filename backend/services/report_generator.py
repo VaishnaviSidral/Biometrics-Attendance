@@ -14,7 +14,7 @@ import logging
 from models.employee import Employee
 from models.attendance import AttendanceLog, DailyAttendance, WeeklySummary, AttendanceStatus, ComplianceStatus
 from services.time_calculator import build_work_mode_config
-from config import settings, get_status_color
+from config import settings, get_status_color, get_status_color_by_hours
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +48,36 @@ class ReportGenerator:
             )
         return self._work_mode_config
 
+    def _get_hour_based_status(self, total_minutes: int) -> str:
+        """Get compliance status based on total hours using configurable thresholds"""
+        ds = self.dynamic_settings
+        total_hours = total_minutes / 60.0
+        return get_status_color_by_hours(
+            total_hours,
+            ds['compliance_hours'],
+            ds['mid_compliance_hours'],
+            ds['non_compliance_hours']
+        )
+
+    def _get_daily_hour_based_status(self, total_minutes: int) -> str:
+        """Get daily compliance status based on hours using configurable thresholds"""
+        ds = self.dynamic_settings
+        total_hours = total_minutes / 60.0
+        return get_status_color_by_hours(
+            total_hours,
+            ds['compliance_hours'],
+            ds['mid_compliance_hours'],
+            ds['non_compliance_hours']
+        )
+
     def get_dashboard_summary(self) -> Dict:
         """Get summary statistics for dashboard"""
-        total_employees = self.db.query(Employee).count()
+        total_employees = self.db.query(Employee).filter(Employee.status == 1).count()
 
         # Count by work_mode
         work_mode_counts = {}
         for mode in ['WFO', 'HYBRID', 'WFH']:
-            count = self.db.query(Employee).filter(Employee.work_mode == mode).count()
+            count = self.db.query(Employee).filter(Employee.work_mode == mode, Employee.status == 1).count()
             work_mode_counts[mode] = count
 
         latest_summary = self.db.query(WeeklySummary).order_by(
@@ -70,28 +92,33 @@ class ReportGenerator:
                 WeeklySummary.week_start == week_start
             ).all()
 
-            # Recalculate compliance using dynamic config for display
+            # Recalculate compliance using hour-based config for display
             total_compliance = 0
             status_counts = {'RED': 0, 'AMBER': 0, 'GREEN': 0}
             total_wfo_days = 0
+            valid_count = 0
 
             for s in weekly_summaries:
-                emp = self.db.query(Employee).filter(Employee.code == s.employee_code).first()
-                work_mode = (emp.work_mode or 'WFO').upper() if emp else 'WFO'
+                emp = self.db.query(Employee).filter(Employee.code == s.employee_code, Employee.status == 1).first()
+                if not emp:
+                    continue
+                work_mode = (emp.work_mode or 'WFO').upper()
                 mode_config = self.work_mode_config.get(work_mode, self.work_mode_config['WFO'])
 
                 if mode_config.get('always_compliant'):
                     compliance = 100.0
                     status_val = 'GREEN'
                 else:
-                    compliance = min(s.compliance_percentage, 100.0)  # Cap at 100%
-                    status_val = s.status.value
+                    compliance = min(s.compliance_percentage, 100.0)
+                    # Use hour-based status
+                    status_val = self._get_hour_based_status(s.total_office_minutes)
 
                 total_compliance += compliance
                 status_counts[status_val] += 1
                 total_wfo_days += s.wfo_days
+                valid_count += 1
 
-            avg_compliance = total_compliance / len(weekly_summaries) if weekly_summaries else 0
+            avg_compliance = total_compliance / valid_count if valid_count else 0
         else:
             week_start = None
             week_end = None
@@ -121,6 +148,7 @@ class ReportGenerator:
         """
         Generate report for all employees.
         Supports filtering by work_mode for the WFO/Hybrid/WFH tabs.
+        Only active employees (status=1).
         """
         if week_start:
             query = self.db.query(Employee, WeeklySummary).outerjoin(
@@ -146,6 +174,9 @@ class ReportGenerator:
                     Employee.code == WeeklySummary.employee_code
                 )
 
+        # Only active employees
+        query = query.filter(Employee.status == 1)
+
         # Filter by work_mode
         if work_mode_filter:
             query = query.filter(Employee.work_mode == work_mode_filter.upper())
@@ -160,13 +191,16 @@ class ReportGenerator:
             work_mode = (emp.work_mode or 'WFO').upper()
             mode_config = self.work_mode_config.get(work_mode, self.work_mode_config['WFO'])
 
+            total_minutes = summary.total_office_minutes if summary else 0
+
             # For WFH employees, compliance is always 100%
             if mode_config.get('always_compliant'):
                 compliance = 100.0
                 status_val = 'GREEN'
             else:
-                compliance = min(summary.compliance_percentage, 100.0) if summary else 0  # Cap at 100%
-                status_val = summary.status.value if summary else 'RED'
+                compliance = min(summary.compliance_percentage, 100.0) if summary else 0
+                # Use hour-based status
+                status_val = self._get_hour_based_status(total_minutes)
 
             required_days = mode_config['required_days']
             expected_weekly_hours = mode_config['expected_weekly_hours']
@@ -177,8 +211,8 @@ class ReportGenerator:
                 'email': emp.email,
                 'department': emp.department,
                 'work_mode': work_mode,
-                'total_office_hours': self._format_minutes(summary.total_office_minutes) if summary else '0h 0m',
-                'total_office_minutes': summary.total_office_minutes if summary else 0,
+                'total_office_hours': self._format_minutes(total_minutes),
+                'total_office_minutes': total_minutes,
                 'wfo_days': summary.wfo_days if summary else 0,
                 'required_wfo_days': required_days,
                 'expected_hours': f"{expected_weekly_hours}h 0m",
@@ -261,11 +295,12 @@ class ReportGenerator:
             pairs = json.loads(record.in_out_pairs) if record.in_out_pairs else []
 
             if expected_daily_minutes > 0:
-                daily_compliance = min((record.total_office_minutes / expected_daily_minutes) * 100, 100.0)  # Cap at 100%
+                daily_compliance = min((record.total_office_minutes / expected_daily_minutes) * 100, 100.0)
             else:
                 daily_compliance = 100.0 if mode_config.get('always_compliant') else 0
 
-            daily_status_color = get_status_color(daily_compliance)
+            # Use hour-based status for daily compliance
+            daily_status_color = self._get_daily_hour_based_status(record.total_office_minutes)
 
             daily_data.append({
                 'date': record.date.isoformat(),
@@ -289,7 +324,8 @@ class ReportGenerator:
                 w_status = 'GREEN'
             else:
                 w_compliance = min(summary.compliance_percentage, 100.0)  # Cap at 100%
-                w_status = summary.status.value
+                # Use hour-based status
+                w_status = self._get_hour_based_status(summary.total_office_minutes)
 
             weekly_data.append({
                 'week_start': summary.week_start.isoformat(),
@@ -304,7 +340,13 @@ class ReportGenerator:
             })
 
         # Average compliance is computed over the filtered weeks only
-        avg_compliance = sum(w['compliance_percentage'] for w in weekly_data) / len(weekly_data) if weekly_data else 0
+        total_actual = sum(w['total_minutes'] for w in weekly_data)
+        total_expected = sum(mode_config['hours_per_day'] * 60 * mode_config['required_days'] for _ in weekly_data)
+
+        avg_compliance = (total_actual / total_expected) * 100 if total_expected > 0 else 0
+
+        # Compute overall hour-based status from total minutes
+        overall_status = self._get_hour_based_status(total_office_minutes) if not mode_config.get('always_compliant') else 'GREEN'
 
         return {
             'employee': {
@@ -318,7 +360,7 @@ class ReportGenerator:
                 'total_office_hours': self._format_minutes(total_office_minutes),
                 'total_wfo_days': total_wfo_days,
                 'avg_compliance': round(avg_compliance, 2),
-                'overall_status': get_status_color(avg_compliance)
+                'overall_status': overall_status
             },
             'daily_records': daily_data,
             'weekly_summaries': weekly_data
@@ -350,7 +392,8 @@ class ReportGenerator:
         ).join(
             Employee, WeeklySummary.employee_code == Employee.code
         ).filter(
-            WeeklySummary.week_start == week_start
+            WeeklySummary.week_start == week_start,
+            Employee.status == 1
         ).all()
 
         employees = []
@@ -366,8 +409,9 @@ class ReportGenerator:
                 status_val = 'GREEN'
             else:
                 compliance = min(summary.compliance_percentage, 100.0)  # Cap at 100%
-                is_compliant = compliance >= self.dynamic_settings['threshold_red']
-                status_val = summary.status.value
+                # Use hour-based status
+                status_val = self._get_hour_based_status(summary.total_office_minutes)
+                is_compliant = status_val == 'GREEN'
 
             if is_compliant:
                 compliant_count += 1
@@ -421,7 +465,7 @@ class ReportGenerator:
         if not week_start:
             week_start = self.db.query(func.max(WeeklySummary.week_start)).scalar()
 
-        all_employees = self.db.query(Employee).all()
+        all_employees = self.db.query(Employee).filter(Employee.status == 1).all()
         total = len(all_employees)
 
         non_exempt_employees = [e for e in all_employees if (e.work_mode or 'WFO').upper() != 'WFH']
@@ -445,8 +489,6 @@ class ReportGenerator:
             ).all()
         }
 
-        threshold_amber = self.dynamic_settings['threshold_amber']  # GREEN threshold (90%)
-
         compliant = 0
         mid_compliant = 0
         non_compliant = 0
@@ -455,14 +497,14 @@ class ReportGenerator:
             summary = summaries.get(emp.code)
 
             if summary:
-                compliance = min(summary.compliance_percentage, 100.0)
-
-                if compliance >= 90:
-                    compliant += 1                    # GREEN
-                elif compliance >= 60:
-                    mid_compliant += 1                # AMBER
+                # Use hour-based compliance status
+                status = self._get_hour_based_status(summary.total_office_minutes)
+                if status == 'GREEN':
+                    compliant += 1
+                elif status == 'AMBER':
+                    mid_compliant += 1
                 else:
-                    non_compliant += 1                # RED
+                    non_compliant += 1
             else:
                 non_compliant += 1                    # No data = non-compliant
 
@@ -513,7 +555,7 @@ class ReportGenerator:
 
         week_end = week_start + timedelta(days=6)
 
-        total_employees = self.db.query(Employee).count()
+        total_employees = self.db.query(Employee).filter(Employee.status == 1).count()
 
         # Presence = total_office_minutes > 0 (biometric reality)
         # NOT based on 9-hour compliance rule
@@ -598,12 +640,12 @@ class ReportGenerator:
                 working_days += 1
             current += timedelta(days=1)
 
-        # Use dynamic settings for required days
+        # Use dynamic settings for required days and hour-based compliance
         ds = self.dynamic_settings
         wfo_days_per_week = ds['wfo_days_per_week']       # e.g. 5
         hybrid_days_per_week = ds['hybrid_days_per_week']  # e.g. 3
-        threshold_red = ds['threshold_red']                # e.g. 60
-        threshold_amber = ds['threshold_amber']            # e.g. 90
+        compliance_hours = ds['compliance_hours']          # e.g. 9
+        mid_compliance_hours = ds['mid_compliance_hours']  # e.g. 7
 
         # Calculate required days for the month proportional to working days
         # working_days represents full weekdays; scale by required per week
@@ -611,8 +653,8 @@ class ReportGenerator:
         wfo_required = round(weeks_in_month * wfo_days_per_week)
         hybrid_required = round(weeks_in_month * hybrid_days_per_week)
 
-        # Get all employees (optionally filtered by search and work_mode)
-        emp_query = self.db.query(Employee)
+        # Get all active employees (optionally filtered by search and work_mode)
+        emp_query = self.db.query(Employee).filter(Employee.status == 1)
 
         if search:
             search_term = f"%{search}%"
@@ -648,6 +690,9 @@ class ReportGenerator:
             wfo_days = sum(1 for r in records if (r.total_office_minutes or 0) > 0)
             # WFH Day = working_days - wfo_days
             wfh_days = working_days - wfo_days
+            # Total office minutes for the month
+            total_office_minutes = sum(r.total_office_minutes or 0 for r in records)
+            total_office_hours = total_office_minutes / 60.0
 
             # Compliance calculation (DAY BASED using dynamic settings)
             if is_exempted:
@@ -669,9 +714,12 @@ class ReportGenerator:
 
                 compliance_percentage = min(compliance_percentage, 100.0)
 
-                if compliance_percentage >= threshold_amber:
+                # Hour-based compliance status using configurable thresholds
+                # Average daily hours for the month compared against settings
+                avg_daily_hours = total_office_hours / wfo_days if wfo_days > 0 else 0
+                if avg_daily_hours >= compliance_hours:
                     compliance_status = "Compliance"
-                elif compliance_percentage >= threshold_red:
+                elif avg_daily_hours >= mid_compliance_hours:
                     compliance_status = "Mid-Compliance"
                 else:
                     compliance_status = "Non-Compliance"
@@ -684,6 +732,8 @@ class ReportGenerator:
                 "exempted": is_exempted,
                 "total_wfo_days": wfo_days,
                 "total_wfh_days": wfh_days,
+                "total_office_hours": round(total_office_hours, 1),
+                "avg_daily_hours": round(total_office_hours / wfo_days, 1) if wfo_days > 0 else 0,
                 "required_days": required_days,
                 "working_days": working_days,
                 "compliance_percentage": round(compliance_percentage, 2),
@@ -722,7 +772,7 @@ class ReportGenerator:
         expected_daily_minutes = self.dynamic_settings['expected_hours_per_day'] * 60
 
         results = []
-        all_employees = self.db.query(Employee).all()
+        all_employees = self.db.query(Employee).filter(Employee.status == 1).all()
 
         for emp in all_employees:
             record = present_employees.get(emp.code)

@@ -25,6 +25,7 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
+import { useViewWeekDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -42,17 +43,19 @@ const COLORS = {
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { weekYear, weekValue, setWeekYear, setWeekValue } = useViewWeekDate('dashboard');
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [complianceStats, setComplianceStats] = useState(null);
+    const [complianceSettings, setComplianceSettings] = useState(null);
     const [error, setError] = useState(null);
 
-    // Calendar-based year + week selection
+    // Calendar-based year + week selection (from global context)
     const currentISO = getCurrentISOWeek();
-    const [selectedYear, setSelectedYear] = useState(currentISO.year);
-    const [selectedWeekValue, setSelectedWeekValue] = useState(
-        `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
-    );
+    const selectedYear = weekYear;
+    const selectedWeekValue = weekValue;
+    const setSelectedYear = setWeekYear;
+    const setSelectedWeekValue = setWeekValue;
 
     // Generate ISO weeks for the selected year (calendar-driven, never from DB)
     const years = useMemo(() => getYearRange(), []);
@@ -70,9 +73,10 @@ export default function Dashboard() {
         [selectedWeekValue]
     );
 
-    // Fetch dashboard summary once on mount
+    // Fetch dashboard summary and settings once on mount
     useEffect(() => {
         fetchSummary();
+        api.getSettings().then(setComplianceSettings).catch(err => console.error('Error fetching settings:', err));
     }, []);
 
     // Fetch chart + compliance data whenever week selection changes
@@ -252,7 +256,7 @@ export default function Dashboard() {
                     icon={ShieldCheck}
                     value={complianceStats?.compliant_employees ?? 0}
                     label="Compliant to WFO Policy"
-                    description="Non-exempt employees meeting WFO policy (≥90%)."
+                    description={`Non-exempt employees meeting WFO policy (≥${complianceSettings?.compliance_hours ?? 9}h).`}
                     status="green"
                     onClick={() => navigate(`/employees?filter=compliant${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
@@ -260,7 +264,7 @@ export default function Dashboard() {
                     icon={ShieldX}
                     value={complianceStats?.non_compliant_employees ?? 0}
                     label="Non-Compliant to WFO Policy"
-                    description="Non-exempt employees below WFO policy (<90%)."
+                    description={`Non-exempt employees below WFO policy (<${complianceSettings?.compliance_hours ?? 9}h).`}
                     status="red"
                     onClick={() => navigate(`/employees?filter=non_compliant${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />

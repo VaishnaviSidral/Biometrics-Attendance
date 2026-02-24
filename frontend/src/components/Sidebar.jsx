@@ -4,6 +4,7 @@ import {
     LayoutDashboard,
     Upload,
     Users,
+    UserCog,
     CalendarDays,
     Settings,
     Fingerprint,
@@ -17,6 +18,7 @@ const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/upload', icon: Upload, label: 'Upload Data' },
     { path: '/employees', icon: Users, label: 'All Employees' },
+    { path: '/manage-employees', icon: UserCog, label: 'Manage Employees' },
     { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -43,7 +45,7 @@ export default function Sidebar() {
             {/* Navigation */}
             <nav className="sidebar-nav">
                 {/* Regular nav items before Monthly Report */}
-                {navItems.slice(0, 3).map((item) => (
+                {navItems.slice(0, 4).map((item) => (
                     <NavLink
                         key={item.path}
                         to={item.path}
@@ -93,7 +95,7 @@ export default function Sidebar() {
                 </div>
 
                 {/* Remaining nav items (Settings) */}
-                {navItems.slice(3).map((item) => (
+                {navItems.slice(4).map((item) => (
                     <NavLink
                         key={item.path}
                         to={item.path}

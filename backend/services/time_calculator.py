@@ -48,6 +48,11 @@ def build_work_mode_config(
             'hours_per_day': 0,
             'expected_weekly_hours': 0,
             'always_compliant': True,  # WFH = 100% compliance
+        },
+        'CLIENT_OFFICE': {
+            'required_days': wfo_days_per_week,
+            'hours_per_day': expected_hours_per_day,
+            'expected_weekly_hours': wfo_days_per_week * expected_hours_per_day,
         }
     }
 

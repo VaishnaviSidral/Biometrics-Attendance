@@ -22,3 +22,8 @@ class AppSettings(Base):
     HYBRID_DAYS_PER_WEEK = "hybrid_days_per_week"
     THRESHOLD_RED = "threshold_red"
     THRESHOLD_AMBER = "threshold_amber"
+
+    # Hour-based compliance thresholds
+    COMPLIANCE_HOURS = "compliance_hours"           # >= X → COMPLIANCE (GREEN)
+    MID_COMPLIANCE_HOURS = "mid_compliance_hours"   # >= Y → MID-COMPLIANCE (AMBER)
+    NON_COMPLIANCE_HOURS = "non_compliance_hours"   # >= Z → NON-COMPLIANCE (RED)

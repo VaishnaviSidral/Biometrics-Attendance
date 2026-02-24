@@ -19,8 +19,11 @@ class SettingsUpdate(BaseModel):
     expected_hours_per_day: int = 9
     wfo_days_per_week: int = 5
     hybrid_days_per_week: int = 3
-    threshold_red: int = 60      # Non-Compliance threshold
-    threshold_amber: int = 90    # Compliance threshold
+    threshold_red: int = 60      # Non-Compliance threshold (percentage)
+    threshold_amber: int = 90    # Compliance threshold (percentage)
+    compliance_hours: int = 9           # >= X hours → COMPLIANCE (GREEN)
+    mid_compliance_hours: int = 7       # >= Y hours → MID-COMPLIANCE (AMBER)
+    non_compliance_hours: int = 6       # >= Z hours → NON-COMPLIANCE (RED)
 
 
 def get_setting_value(db: Session, key: str, default: str) -> str:
@@ -62,6 +65,18 @@ async def get_settings(db: Session = Depends(get_db)) -> Dict:
         db, AppSettings.THRESHOLD_AMBER,
         str(default_settings.THRESHOLD_AMBER)
     ))
+    compliance_hours = int(get_setting_value(
+        db, AppSettings.COMPLIANCE_HOURS,
+        str(default_settings.COMPLIANCE_HOURS)
+    ))
+    mid_compliance_hours = int(get_setting_value(
+        db, AppSettings.MID_COMPLIANCE_HOURS,
+        str(default_settings.MID_COMPLIANCE_HOURS)
+    ))
+    non_compliance_hours = int(get_setting_value(
+        db, AppSettings.NON_COMPLIANCE_HOURS,
+        str(default_settings.NON_COMPLIANCE_HOURS)
+    ))
 
     return {
         "expected_hours_per_day": expected_hours,
@@ -72,7 +87,10 @@ async def get_settings(db: Session = Depends(get_db)) -> Dict:
         "thresholds": {
             "red": threshold_red,
             "amber": threshold_amber
-        }
+        },
+        "compliance_hours": compliance_hours,
+        "mid_compliance_hours": mid_compliance_hours,
+        "non_compliance_hours": non_compliance_hours
     }
 
 
@@ -87,6 +105,9 @@ async def update_settings(
     set_setting_value(db, AppSettings.HYBRID_DAYS_PER_WEEK, str(settings_data.hybrid_days_per_week))
     set_setting_value(db, AppSettings.THRESHOLD_RED, str(settings_data.threshold_red))
     set_setting_value(db, AppSettings.THRESHOLD_AMBER, str(settings_data.threshold_amber))
+    set_setting_value(db, AppSettings.COMPLIANCE_HOURS, str(settings_data.compliance_hours))
+    set_setting_value(db, AppSettings.MID_COMPLIANCE_HOURS, str(settings_data.mid_compliance_hours))
+    set_setting_value(db, AppSettings.NON_COMPLIANCE_HOURS, str(settings_data.non_compliance_hours))
 
     db.commit()
 
@@ -99,7 +120,10 @@ async def update_settings(
             "thresholds": {
                 "red": settings_data.threshold_red,
                 "amber": settings_data.threshold_amber
-            }
+            },
+            "compliance_hours": settings_data.compliance_hours,
+            "mid_compliance_hours": settings_data.mid_compliance_hours,
+            "non_compliance_hours": settings_data.non_compliance_hours
         }
     }
 
@@ -130,11 +154,26 @@ def get_dynamic_settings(db: Session) -> Dict:
         db, AppSettings.THRESHOLD_AMBER,
         str(default_settings.THRESHOLD_AMBER)
     ))
+    compliance_hours = int(get_setting_value(
+        db, AppSettings.COMPLIANCE_HOURS,
+        str(default_settings.COMPLIANCE_HOURS)
+    ))
+    mid_compliance_hours = int(get_setting_value(
+        db, AppSettings.MID_COMPLIANCE_HOURS,
+        str(default_settings.MID_COMPLIANCE_HOURS)
+    ))
+    non_compliance_hours = int(get_setting_value(
+        db, AppSettings.NON_COMPLIANCE_HOURS,
+        str(default_settings.NON_COMPLIANCE_HOURS)
+    ))
 
     return {
         "expected_hours_per_day": expected_hours,
         "wfo_days_per_week": wfo_days,
         "hybrid_days_per_week": hybrid_days,
         "threshold_red": threshold_red,
-        "threshold_amber": threshold_amber
+        "threshold_amber": threshold_amber,
+        "compliance_hours": compliance_hours,
+        "mid_compliance_hours": mid_compliance_hours,
+        "non_compliance_hours": non_compliance_hours
     }

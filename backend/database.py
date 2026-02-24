@@ -146,5 +146,18 @@ def _migrate_employees_table():
             except Exception as e:
                 db.rollback()
                 logger.warning(f"Could not add email column: {e}")
+
+        # Check if status column exists
+        try:
+            db.execute(text("SELECT status FROM employees LIMIT 1"))
+        except Exception:
+            db.rollback()
+            try:
+                db.execute(text("ALTER TABLE employees ADD COLUMN status INT DEFAULT 1"))
+                db.commit()
+                logger.info("Added status column to employees table")
+            except Exception as e:
+                db.rollback()
+                logger.warning(f"Could not add status column: {e}")
     finally:
         db.close()

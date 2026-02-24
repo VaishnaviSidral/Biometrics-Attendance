@@ -1,19 +1,33 @@
 import { useEffect, useState } from "react";
 import { Download, Search, Calendar } from "lucide-react";
 import api from "../api/client";
+import { useViewMonthDate } from "../contexts/DateContext";
 
 export default function MonthlyReport({ workMode }) {
-    const [month, setMonth] = useState("");
+    const { monthString, setMonthString } = useViewMonthDate('monthlyReport');
+    const [month, setMonthLocal] = useState(monthString);
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [complianceSettings, setComplianceSettings] = useState(null);
 
-    // Default to current month
+    // Sync local month with global context
+    const setMonth = (val) => {
+        setMonthLocal(val);
+        setMonthString(val);
+    };
+
+    // Sync from context on mount (no need for default useEffect)
     useEffect(() => {
-        const now = new Date();
-        const m = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        setMonth(m);
+        setMonthLocal(monthString);
+    }, [monthString]);
+
+    // Fetch compliance settings on mount
+    useEffect(() => {
+        api.getSettings()
+            .then(setComplianceSettings)
+            .catch(err => console.error('Error fetching settings:', err));
     }, []);
 
     // Debounce search input
@@ -198,12 +212,12 @@ export default function MonthlyReport({ workMode }) {
                             ) : (
                                 data.map((row, index) => {
                                     const mode = row.work_mode || "WFO";
-                                    const modeColors = { WFO: "#3b82f6", HYBRID: "#8b5cf6", WFH: "#06b6d4" };
+                                    const modeColors = { WFO: "#3b82f6", HYBRID: "#8b5cf6", WFH: "#06b6d4", CLIENT_OFFICE: "#f59e0b" };
 
                                     const compliance = row.compliance_percentage || 0;
-                                    let statusClass = "green";
-                                    if (compliance < 60) statusClass = "red";
-                                    else if (compliance < 90) statusClass = "amber";
+                                    // Use compliance_status from backend (hour-based) for color
+                                    const statusMap = { "Compliance": "green", "Mid-Compliance": "amber", "Non-Compliance": "red" };
+                                    const statusClass = statusMap[row.compliance_status] || "red";
 
                                     const status = row.compliance_status || "Non-Compliance";
                                     const statusColors = {

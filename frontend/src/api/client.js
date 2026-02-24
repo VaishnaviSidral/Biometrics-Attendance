@@ -165,6 +165,11 @@ export const api = {
 
     getEmployee: (code) => request(`/employees/${code}`),
 
+    createEmployee: (data) => request('/employees/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+
     updateEmployee: (code, data) => request(`/employees/${code}`, {
         method: 'PUT',
         body: JSON.stringify(data),

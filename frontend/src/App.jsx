@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -11,17 +12,19 @@ import IndividualReport from './pages/IndividualReport';
 import Settings from './pages/Settings';
 import MonthlyReport from './pages/MonthlyReport';
 import EmployeeDashboard from './pages/EmployeeDashboard';
+import ManageEmployees from './pages/ManageEmployees';
 
 function Layout() {
   const location = useLocation();
   const { isAuthenticated, isAdmin, isEmployee } = useAuth();
 
-  const getCurrentPageTitle = () => {
+    const getCurrentPageTitle = () => {
     const path = location.pathname;
     const titles = {
       '/': 'Dashboard',
       '/upload': 'Upload Data',
       '/employees': 'All Employees',
+      '/manage-employees': 'Manage Employees',
       '/monthly-report/wfo': 'Monthly Report — WFO',
       '/monthly-report/hybrid': 'Monthly Report — Hybrid',
       '/settings': 'Settings',
@@ -111,6 +114,14 @@ function Layout() {
             }
           />
           <Route
+            path="/manage-employees"
+            element={
+              <ProtectedRoute requireAdmin>
+                <ManageEmployees />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/settings"
             element={
               <ProtectedRoute requireAdmin>
@@ -131,7 +142,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Layout />
+          <Layout />
       </AuthProvider>
     </BrowserRouter>
   );

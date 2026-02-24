@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     THRESHOLD_RED: int = 60
     THRESHOLD_AMBER: int = 90
 
+    # Hour-based compliance thresholds (daily)
+    COMPLIANCE_HOURS: int = 9        # >= 9h → COMPLIANCE (GREEN)
+    MID_COMPLIANCE_HOURS: int = 7    # >= 7h → MID-COMPLIANCE (AMBER)
+    NON_COMPLIANCE_HOURS: int = 6    # >= 6h → NON-COMPLIANCE (RED), < 6h also RED
+
     API_PREFIX: str = "/api"
     DEBUG: bool = True
 
@@ -65,7 +70,7 @@ settings = Settings()
 
 def get_status_color(percentage: float) -> str:
     """
-    Get status color based on attendance percentage
+    Get status color based on attendance percentage (legacy fallback)
 
     Per README:
         Compliance     >= 90%  → GREEN
@@ -75,6 +80,24 @@ def get_status_color(percentage: float) -> str:
     if percentage >= settings.THRESHOLD_AMBER:
         return "GREEN"
     elif percentage >= settings.THRESHOLD_RED:
+        return "AMBER"
+    else:
+        return "RED"
+
+
+def get_status_color_by_hours(total_hours: float, compliance_hours: int, mid_compliance_hours: int, non_compliance_hours: int) -> str:
+    """
+    Get status color based on total working hours (hour-based compliance).
+
+    Rules:
+        total_hours >= compliance_hours       → GREEN  (COMPLIANCE)
+        total_hours >= mid_compliance_hours    → AMBER  (MID-COMPLIANCE)
+        total_hours >= non_compliance_hours    → RED    (NON-COMPLIANCE)
+        total_hours < non_compliance_hours     → RED    (NON-COMPLIANCE)
+    """
+    if total_hours >= compliance_hours:
+        return "GREEN"
+    elif total_hours >= mid_compliance_hours:
         return "AMBER"
     else:
         return "RED"
