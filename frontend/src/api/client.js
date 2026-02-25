@@ -2,7 +2,9 @@
  * API Client for Biometrics Attendance System
  */
 
-const API_BASE_URL = 'http://localhost:8000/api';
+// In production (Docker), API is served via nginx at /api
+// In development, Vite proxy forwards /api → http://localhost:8000/api
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Store auth token
 let authToken = null;
@@ -212,7 +214,6 @@ export const api = {
     exportMonthlyReportCSV: async (params = {}) => {
         const searchParams = new URLSearchParams();
         if (params.month) searchParams.set('month', params.month);
-        if (params.search) searchParams.set('search', params.search);
         if (params.work_mode) searchParams.set('work_mode', params.work_mode);
 
         const blob = await request(`/reports/monthly-report/export?${searchParams}`);

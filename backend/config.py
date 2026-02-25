@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     THRESHOLD_AMBER: int = 90
 
     # Hour-based compliance thresholds (daily)
-    COMPLIANCE_HOURS: int = 9        # >= 9h → COMPLIANCE (GREEN)
-    MID_COMPLIANCE_HOURS: int = 7    # >= 7h → MID-COMPLIANCE (AMBER)
-    NON_COMPLIANCE_HOURS: int = 6    # >= 6h → NON-COMPLIANCE (RED), < 6h also RED
+    COMPLIANCE_HOURS: int = 9        # >= 9h → Compliance
+    MID_COMPLIANCE_HOURS: int = 7    # >= 7h → Mid-Compliance
+    NON_COMPLIANCE_HOURS: int = 6    # >= 6h → Non-Compliance, < 6h also Non-Compliance
 
     API_PREFIX: str = "/api"
     DEBUG: bool = True
@@ -70,34 +70,34 @@ settings = Settings()
 
 def get_status_color(percentage: float) -> str:
     """
-    Get status color based on attendance percentage (legacy fallback)
+    Get compliance status based on attendance percentage (legacy fallback)
 
     Per README:
-        Compliance     >= 90%  → GREEN
-        Mid-Compliance = 60% – 89%  → AMBER
-        Non-Compliance < 60%  → RED
+        Compliance     >= 90%  → Compliance
+        Mid-Compliance = 60% – 89%  → Mid-Compliance
+        Non-Compliance < 60%  → Non-Compliance
     """
     if percentage >= settings.THRESHOLD_AMBER:
-        return "GREEN"
+        return "Compliance"
     elif percentage >= settings.THRESHOLD_RED:
-        return "AMBER"
+        return "Mid-Compliance"
     else:
-        return "RED"
+        return "Non-Compliance"
 
 
 def get_status_color_by_hours(total_hours: float, compliance_hours: int, mid_compliance_hours: int, non_compliance_hours: int) -> str:
     """
-    Get status color based on total working hours (hour-based compliance).
+    Get compliance status based on total working hours (hour-based compliance).
 
     Rules:
-        total_hours >= compliance_hours       → GREEN  (COMPLIANCE)
-        total_hours >= mid_compliance_hours    → AMBER  (MID-COMPLIANCE)
-        total_hours >= non_compliance_hours    → RED    (NON-COMPLIANCE)
-        total_hours < non_compliance_hours     → RED    (NON-COMPLIANCE)
+        total_hours >= compliance_hours       → Compliance
+        total_hours >= mid_compliance_hours    → Mid-Compliance
+        total_hours >= non_compliance_hours    → Non-Compliance
+        total_hours < non_compliance_hours     → Non-Compliance
     """
     if total_hours >= compliance_hours:
-        return "GREEN"
+        return "Compliance"
     elif total_hours >= mid_compliance_hours:
-        return "AMBER"
+        return "Mid-Compliance"
     else:
-        return "RED"
+        return "Non-Compliance"

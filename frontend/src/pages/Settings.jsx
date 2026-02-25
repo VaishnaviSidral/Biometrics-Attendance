@@ -202,7 +202,7 @@ export default function Settings() {
                 }}>
                     <div className="form-group">
                         <label className="form-label" style={{ color: 'var(--color-status-green)' }}>
-                            Compliance Hours (GREEN)
+                            Compliance Hours
                         </label>
                         <input
                             type="number"
@@ -226,7 +226,7 @@ export default function Settings() {
 
                     <div className="form-group">
                         <label className="form-label" style={{ color: '#f59e0b' }}>
-                            Mid-Compliance Hours (AMBER)
+                            Mid-Compliance Hours
                         </label>
                         <input
                             type="number"
@@ -250,7 +250,7 @@ export default function Settings() {
 
                     <div className="form-group">
                         <label className="form-label" style={{ color: 'var(--color-status-red)' }}>
-                            Non-Compliance Hours (RED)
+                            Non-Compliance Hours
                         </label>
                         <input
                             type="number"
@@ -268,7 +268,7 @@ export default function Settings() {
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            &lt; {midComplianceHrs}h → NON-COMPLIANT (RED)
+                            &lt; {midComplianceHrs}h → Non-Compliance
                         </p>
                     </div>
                 </div>
@@ -288,28 +288,28 @@ export default function Settings() {
                         <p className="font-bold" style={{ color: 'var(--color-status-green)', fontSize: 'var(--font-size-lg)' }}>
                             ≥ {complianceHrs}h
                         </p>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>GREEN status</p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>Compliance status</p>
                     </div>
                     <div>
                         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Mid-Compliance</p>
                         <p className="font-bold" style={{ color: '#f59e0b', fontSize: 'var(--font-size-lg)' }}>
                             ≥ {midComplianceHrs}h &amp; &lt; {complianceHrs}h
                         </p>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>AMBER status</p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>Mid-Compliance status</p>
                     </div>
                     <div>
                         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Non-Compliance</p>
                         <p className="font-bold" style={{ color: 'var(--color-status-red)', fontSize: 'var(--font-size-lg)' }}>
                             &lt; {midComplianceHrs}h
                         </p>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>RED status</p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>Non-Compliance status</p>
                     </div>
                 </div>
             </div>
 
             {/* Compliance Rules */}
             <div className="card mb-6">
-                <h3 className="card-title mb-6">Compliance Rules</h3>
+                <h3 className="card-title mb-6">Compliance Rules — Daily Discipline Model</h3>
 
                 <div style={{
                     display: 'grid',
@@ -331,10 +331,32 @@ export default function Settings() {
                             <span className="font-medium">COMPLIANT</span>
                         </div>
                         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-                            Total weekly hours ≥ required hours
+                            Daily hours ≥ {complianceHrs}h on every working day
                         </p>
                         <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                            WFO: ≥ {wfoDays * hoursPerDay}h &nbsp;|&nbsp; Hybrid: ≥ {hybridDays * hoursPerDay}h
+                            Weekly/Monthly: All days must be Compliant
+                        </p>
+                    </div>
+
+                    <div style={{
+                        padding: 'var(--spacing-4)',
+                        background: '#fef9c3',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid #fde68a'
+                    }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span style={{
+                                width: '12px', height: '12px',
+                                background: '#f59e0b',
+                                borderRadius: 'var(--radius-full)'
+                            }}></span>
+                            <span className="font-medium">MID-COMPLIANT</span>
+                        </div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            Daily hours ≥ {midComplianceHrs}h and &lt; {complianceHrs}h
+                        </p>
+                        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            Weekly/Monthly: If any Mid-Compliance day exists (and no Non-Compliance)
                         </p>
                     </div>
 
@@ -353,10 +375,20 @@ export default function Settings() {
                             <span className="font-medium">NON-COMPLIANT</span>
                         </div>
                         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-                            Total weekly hours &lt; required hours
+                            Daily hours &lt; {midComplianceHrs}h or Absent
+                        </p>
+                        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            Weekly/Monthly: If any Non-Compliance day exists
                         </p>
                     </div>
+                </div>
 
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr',
+                    gap: 'var(--spacing-3)',
+                    marginTop: 'var(--spacing-4)'
+                }}>
                     <div style={{
                         padding: 'var(--spacing-4)',
                         background: '#dbeafe',
@@ -369,10 +401,10 @@ export default function Settings() {
                                 background: '#2563eb',
                                 borderRadius: 'var(--radius-full)'
                             }}></span>
-                            <span className="font-medium">EXEMPTED</span>
+                            <span className="font-medium">EXEMPTED (WFH)</span>
                         </div>
                         <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
-                            WFH employees — not counted in compliance metrics
+                            WFH employees — always marked as Compliant
                         </p>
                     </div>
                 </div>
@@ -386,8 +418,9 @@ export default function Settings() {
                     fontSize: 'var(--font-size-sm)',
                     color: 'var(--color-text-muted)'
                 }}>
-                    <strong>Attendance Rule:</strong> An employee is marked <strong>PRESENT</strong> for a day if they have any biometric office time recorded ({'>'}0 minutes).
-                    Compliance is calculated separately at the weekly level based on total hours vs required hours.
+                    <strong>Daily Discipline Rule:</strong> Compliance is evaluated per day using configured expected hours.
+                    Weekly and monthly compliance are aggregations of daily compliance statuses — not aggregations of hours.
+                    Working extra on some days does <strong>NOT</strong> compensate for underworking on other days.
                 </div>
             </div>
 

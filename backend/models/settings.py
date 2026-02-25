@@ -24,6 +24,6 @@ class AppSettings(Base):
     THRESHOLD_AMBER = "threshold_amber"
 
     # Hour-based compliance thresholds
-    COMPLIANCE_HOURS = "compliance_hours"           # >= X → COMPLIANCE (GREEN)
-    MID_COMPLIANCE_HOURS = "mid_compliance_hours"   # >= Y → MID-COMPLIANCE (AMBER)
-    NON_COMPLIANCE_HOURS = "non_compliance_hours"   # >= Z → NON-COMPLIANCE (RED)
+    COMPLIANCE_HOURS = "compliance_hours"           # >= X → Compliance
+    MID_COMPLIANCE_HOURS = "mid_compliance_hours"   # >= Y → Mid-Compliance
+    NON_COMPLIANCE_HOURS = "non_compliance_hours"   # >= Z → Non-Compliance

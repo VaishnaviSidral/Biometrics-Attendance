@@ -14,7 +14,6 @@ from services.time_calculator import TimeCalculator, build_work_mode_config
 from services.auth_utils import require_admin, CurrentUser
 from models.employee import Employee
 from models.attendance import AttendanceLog, DailyAttendance, WeeklySummary, AttendanceStatus, ComplianceStatus
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +127,15 @@ async def upload_attendance_file(
             wfo_days_per_week=dynamic_settings['wfo_days_per_week'],
             hybrid_days_per_week=dynamic_settings['hybrid_days_per_week'],
             threshold_red=dynamic_settings['threshold_red'],
-            threshold_amber=dynamic_settings['threshold_amber']
+            threshold_amber=dynamic_settings['threshold_amber'],
+            compliance_hours=dynamic_settings['compliance_hours'],
+            mid_compliance_hours=dynamic_settings['mid_compliance_hours'],
+            non_compliance_hours=dynamic_settings['non_compliance_hours']
         )
+
+        # Fetch employee work modes for compliance_status computation
+        all_employees = db.query(Employee).all()
+        employee_work_modes = {emp.code: (emp.work_mode or 'WFO') for emp in all_employees}
 
         # Calculate daily summaries from current file and upsert
         daily_summaries = calculator.calculate_daily_summary(records)
@@ -144,9 +150,24 @@ async def upload_attendance_file(
 
                 status_enum = AttendanceStatus[summary['status']]
 
+                # Compute daily compliance_status using rule engine
+                work_mode = employee_work_modes.get(emp_code, 'WFO').upper()
+                is_wfh = work_mode == 'WFH'
+                is_present = summary['total_office_minutes'] > 0 or summary['status'] == 'PRESENT'
+
+                # Only compute compliance for weekdays
+                if rec_date.weekday() < 5:
+                    daily_compliance = calculator.compute_daily_compliance_status(
+                        summary['total_office_minutes'], is_present, is_wfh
+                    )
+                    compliance_enum = ComplianceStatus(daily_compliance)
+                else:
+                    compliance_enum = None  # Weekends don't have compliance
+
                 if existing:
                     existing.total_office_minutes = summary['total_office_minutes']
                     existing.status = status_enum
+                    existing.compliance_status = compliance_enum
                     existing.in_out_pairs = summary['in_out_pairs']
                     existing.first_in = summary['first_in']
                     existing.last_out = summary['last_out']
@@ -156,6 +177,7 @@ async def upload_attendance_file(
                         date=rec_date,
                         total_office_minutes=summary['total_office_minutes'],
                         status=status_enum,
+                        compliance_status=compliance_enum,
                         in_out_pairs=summary.get('in_out_pairs'),
                         first_in=summary.get('first_in'),
                         last_out=summary.get('last_out')
@@ -171,10 +193,6 @@ async def upload_attendance_file(
         all_dates = [record['date'] for record in records]
         weeks = calculator.get_all_weeks(all_dates)
         weekly_created = 0
-
-        # Fetch employee work modes
-        all_employees = db.query(Employee).all()
-        employee_work_modes = {emp.code: (emp.work_mode or 'WFO') for emp in all_employees}
 
         # Build dynamic work mode config from settings
         work_mode_config = build_work_mode_config(
@@ -198,17 +216,19 @@ async def upload_attendance_file(
             for rec in db_daily_records:
                 # weekday(): Mon=0 ... Sun=6
                 if rec.date.weekday() >= 5:
-                    continue   # ❌ skip Saturday & Sunday
+                    continue   # skip Saturday & Sunday
 
                 if rec.employee_code not in db_daily_summaries:
                     db_daily_summaries[rec.employee_code] = {}
 
                 db_daily_summaries[rec.employee_code][rec.date] = {
                     'total_office_minutes': rec.total_office_minutes,
-                    'status': rec.status.value
+                    'status': rec.status.value,
+                    'compliance_status': rec.compliance_status.value if rec.compliance_status else None
                 }
 
             # Calculate weekly summary from complete DB data
+            # Weekly status is derived from daily compliance_status aggregation
             weekly_data = calculator.calculate_weekly_summary(
                 db_daily_summaries, week_start, week_end,
                 employee_work_modes, work_mode_config
@@ -220,7 +240,7 @@ async def upload_attendance_file(
                     WeeklySummary.week_start == week_start
                 ).first()
 
-                status_enum = ComplianceStatus[week_summary['status']]
+                status_enum = ComplianceStatus(week_summary['status'])
 
                 if existing:
                     existing.total_office_minutes = week_summary['total_office_minutes']

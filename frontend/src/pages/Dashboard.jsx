@@ -33,12 +33,13 @@ import {
     getYearRange,
 } from '../utils/isoWeek';
 
-const COLORS = {
-    GREEN: '#10b981',
-    AMBER: '#f59e0b',
-    RED: '#ef4444',
-    BLUE: '#3b82f6',
-    GRAY: '#9ca3af'
+// Visual chart colors — display-only, no business logic
+const CHART_COLORS = {
+    compliance: '#10b981',
+    midCompliance: '#f59e0b',
+    nonCompliance: '#ef4444',
+    blue: '#3b82f6',
+    gray: '#9ca3af'
 };
 
 export default function Dashboard() {
@@ -163,9 +164,9 @@ export default function Dashboard() {
 
     // Pie chart data
     const pieData = complianceStats ? [
-        { name: 'Compliance', value: complianceStats.compliant_employees || 0, color: COLORS.GREEN },
-        { name: 'Mid-Compliance', value: complianceStats.partial_compliant_employees || 0, color: COLORS.AMBER },
-        { name: 'Non-Compliance', value: complianceStats.non_compliant_employees || 0, color: COLORS.RED }
+        { name: 'Compliance', value: complianceStats.compliant_employees || 0, color: CHART_COLORS.compliance },
+        { name: 'Mid-Compliance', value: complianceStats.partial_compliant_employees || 0, color: CHART_COLORS.midCompliance },
+        { name: 'Non-Compliance', value: complianceStats.non_compliant_employees || 0, color: CHART_COLORS.nonCompliance }
     ].filter(d => d.value > 0) : [];
     
 
@@ -297,7 +298,7 @@ export default function Dashboard() {
                                     dataKey="wfo"
                                     name="Work From Office"
                                     stackId="a"
-                                    fill={COLORS.GREEN}
+                                    fill={CHART_COLORS.compliance}
                                     radius={[0, 0, 4, 4]}
                                     onClick={(data) => handleBarClick(data, 'WFO')}
                                     style={{ cursor: 'pointer' }}
@@ -306,7 +307,7 @@ export default function Dashboard() {
                                     dataKey="wfh"
                                     name="WFH / Absent"
                                     stackId="a"
-                                    fill={COLORS.GRAY}
+                                    fill={CHART_COLORS.gray}
                                     radius={[4, 4, 0, 0]}
                                     onClick={(data) => handleBarClick(data, 'WFH')}
                                     style={{ cursor: 'pointer' }}

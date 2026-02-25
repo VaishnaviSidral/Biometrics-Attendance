@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
-import StatusBadge from '../components/StatusBadge';
+import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
 import { useViewMonthDate } from '../contexts/DateContext';
 
@@ -135,33 +135,8 @@ export default function IndividualReport() {
             key: 'daily_compliance',
             label: 'Daily Compliance',
             render: (value, row) => {
-                const normalizeStatus = (status) => {
-                    if (!status) return 'RED';
-                    const s = String(status).trim().toUpperCase();
-                
-                    const map = {
-                        GREEN: 'GREEN',
-                        AMBER: 'AMBER',
-                        RED: 'RED',
-                
-                        COMPLIANCE: 'GREEN',
-                        COMPLIANT: 'GREEN',
-                
-                        MID: 'AMBER',
-                        MID_COMPLIANCE: 'AMBER',
-                        'MID-COMPLIANCE': 'AMBER',
-                        PARTIAL: 'AMBER',
-                
-                        NON: 'RED',
-                        NON_COMPLIANCE: 'RED',
-                        'NON-COMPLIANCE': 'RED',
-                        NONCOMPLIANT: 'RED'
-                    };
-                
-                    return map[s] || 'RED';
-                };
-                
-                const rawStatus = normalizeStatus(row.daily_status_color || row.status);
+                // Use the status string directly from backend (Compliance / Mid-Compliance / Non-Compliance)
+                const status = row.daily_status_color || 'Non-Compliance';
                 const isWeekend = row.day === 'Saturday' || row.day === 'Sunday';
                 return (
                     <div className="flex items-center gap-2">
@@ -170,14 +145,11 @@ export default function IndividualReport() {
                             <span className="font-medium">
                                 {value?.toFixed(1) || 0}%
                             </span>
-
-                            {/* Send REAL STATUS, not color */}
-                            <StatusBadge status={rawStatus} />
+                            <StatusBadge status={status} />
                         </>
                     )}
                     </div>
                 );
-                
             }
         }
     ];
@@ -209,7 +181,7 @@ export default function IndividualReport() {
                 <div className="flex items-center gap-3">
                     <div className="progress-bar" style={{ width: '80px' }}>
                         <div
-                            className={`progress-fill ${row.status?.toLowerCase()}`}
+                            className={`progress-fill ${statusToCssClass(row.status)}`}
                             style={{ width: `${Math.min(value, 100)}%` }}
                         />
                     </div>
@@ -336,7 +308,7 @@ export default function IndividualReport() {
                     icon={TrendingUp}
                     value={`${report?.summary?.avg_compliance?.toFixed(1) || 0}%`}
                     label="Average Compliance"
-                    status={report?.summary?.overall_status?.toLowerCase()}
+                    status={statusToCssClass(report?.summary?.overall_status)}
                 />
                 <SummaryCard
                     icon={Calendar}

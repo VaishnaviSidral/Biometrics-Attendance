@@ -94,16 +94,11 @@ export default function EmployeeDashboard() {
 
     const getStatusColor = (status) => {
         const colors = {
-            GREEN: { bg: '#dcfce7', text: '#16a34a', border: '#bbf7d0' },
-            AMBER: { bg: '#fef9c3', text: '#ca8a04', border: '#fde68a' },
-            RED: { bg: '#fecaca', text: '#dc2626', border: '#fca5a5' }
+            'Compliance':      { bg: '#dcfce7', text: '#16a34a', border: '#bbf7d0' },
+            'Mid-Compliance':  { bg: '#fef9c3', text: '#ca8a04', border: '#fde68a' },
+            'Non-Compliance':  { bg: '#fecaca', text: '#dc2626', border: '#fca5a5' }
         };
-        return colors[status] || colors.RED;
-    };
-
-    const getStatusLabel = (status) => {
-        const labels = { GREEN: 'Compliance', AMBER: 'Mid-Compliance', RED: 'Non-Compliance' };
-        return labels[status] || 'Non-Compliance';
+        return colors[status] || colors['Non-Compliance'];
     };
 
     if (loading && !data) {
@@ -153,7 +148,7 @@ export default function EmployeeDashboard() {
             wfoDays: apiData?.wfo_days || 0,
             requiredDays: apiData?.required_days || 0,
             compliancePercentage: apiData?.compliance_percentage ?? 0,
-            status: apiData?.status || 'RED',
+            status: apiData?.status || 'Non-Compliance',
         };
     });
 
@@ -262,7 +257,7 @@ export default function EmployeeDashboard() {
                         color: statusColor.text,
                         marginTop: 'var(--spacing-2)'
                     }}>
-                        {getStatusLabel(week.status)}
+                        {week.status}
                     </div>
                     <div style={{ fontSize: 'var(--font-size-sm)', color: statusColor.text, marginTop: 'var(--spacing-1)' }}>
                         Week Status
@@ -413,7 +408,7 @@ export default function EmployeeDashboard() {
                                             fontSize: '12px', fontWeight: 600,
                                             background: wsColor.bg, color: wsColor.text
                                         }}>
-                                            {getStatusLabel(ws.status)}
+                                            {ws.status}
                                         </span>
                                     </td>
                                 </tr>

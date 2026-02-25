@@ -21,9 +21,9 @@ class SettingsUpdate(BaseModel):
     hybrid_days_per_week: int = 3
     threshold_red: int = 60      # Non-Compliance threshold (percentage)
     threshold_amber: int = 90    # Compliance threshold (percentage)
-    compliance_hours: int = 9           # >= X hours → COMPLIANCE (GREEN)
-    mid_compliance_hours: int = 7       # >= Y hours → MID-COMPLIANCE (AMBER)
-    non_compliance_hours: int = 6       # >= Z hours → NON-COMPLIANCE (RED)
+    compliance_hours: int = 9           # >= X hours → Compliance
+    mid_compliance_hours: int = 7       # >= Y hours → Mid-Compliance
+    non_compliance_hours: int = 6       # >= Z hours → Non-Compliance
 
 
 def get_setting_value(db: Session, key: str, default: str) -> str:

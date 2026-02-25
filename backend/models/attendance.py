@@ -15,14 +15,11 @@ class AttendanceStatus(str, enum.Enum):
     """Status for daily attendance"""
     PRESENT = "PRESENT"
     ABSENT = "ABSENT"
-    PARTIAL = "PARTIAL"
-
-
 class ComplianceStatus(str, enum.Enum):
-    """Color status for compliance"""
-    RED = "RED"
-    AMBER = "AMBER"
-    GREEN = "GREEN"
+    """Status for compliance"""
+    NON_COMPLIANCE = "Non-Compliance"
+    MID_COMPLIANCE = "Mid-Compliance"
+    COMPLIANCE = "Compliance"
 
 
 class AttendanceLog(Base):
@@ -59,6 +56,7 @@ class DailyAttendance(Base):
     date = Column(Date, nullable=False, index=True)
     total_office_minutes = Column(Integer, default=0)
     status = Column(Enum(AttendanceStatus), nullable=False, default=AttendanceStatus.ABSENT)
+    compliance_status = Column(Enum(ComplianceStatus), nullable=True, default=None)
     in_out_pairs = Column(Text, nullable=True)  # JSON string of IN/OUT pairs
     first_in = Column(Time, nullable=True)
     last_out = Column(Time, nullable=True)
@@ -89,7 +87,7 @@ class WeeklySummary(Base):
     wfo_days = Column(Integer, default=0)
     expected_minutes = Column(Integer, default=2700)  # WFO: 5 days * 9 hours * 60 mins = 2700
     compliance_percentage = Column(Float, default=0.0)
-    status = Column(Enum(ComplianceStatus), nullable=False, default=ComplianceStatus.RED)
+    status = Column(Enum(ComplianceStatus), nullable=False, default=ComplianceStatus.NON_COMPLIANCE)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationship

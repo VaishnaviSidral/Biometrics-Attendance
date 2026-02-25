@@ -78,7 +78,7 @@ async def get_all_employees_report(
     week_start: Optional[str] = Query(None, description="Week start date (YYYY-MM-DD)"),
     sort_by: str = Query("name", description="Sort by: name, compliance, hours, status"),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    status_filter: Optional[str] = Query(None, description="Filter by status: RED, AMBER, GREEN"),
+    status_filter: Optional[str] = Query(None, description="Filter by status: Non-Compliance, Mid-Compliance, Compliance"),
     work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID, WFH"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin)
@@ -180,10 +180,11 @@ async def export_monthly_report_csv(
         "Emp Code",
         "Emp Name",
         "Work Mode",
-        "Exempted",
+        "Required WFO Days",
         "Total WFO Days",
         "Total WFH Days",
-        "Compliance %",
+        "Days Below Required Hours",
+        # "Compliance %",
         "Status"
     ])
 
@@ -192,10 +193,11 @@ async def export_monthly_report_csv(
             row["employee_code"],
             row["employee_name"],
             row["work_mode"],
-            "YES" if row["exempted"] else "NO",
+            row["required_days"], 
             row["total_wfo_days"],
             row["total_wfh_days"],
-            f'{row["compliance_percentage"]:.2f}%',
+            row["days_below_required_hours"],
+            # f'{row["compliance_percentage"]:.2f}%',
             row["compliance_status"]
         ])
 
@@ -210,62 +212,62 @@ async def export_monthly_report_csv(
     )
 
 
-@router.get("/monthly-report/export/{employee_code}")
-async def export_monthly_individual_csv(
-    employee_code: str,
-    month: str = Query(..., description="Month in YYYY-MM format"),
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin)
-):
-    """Export individual employee monthly attendance as CSV"""
-    from datetime import datetime as dt_mod
-    import calendar as cal_mod
+# @router.get("/monthly-report/export/{employee_code}")
+# async def export_monthly_individual_csv(
+#     employee_code: str,
+#     month: str = Query(..., description="Month in YYYY-MM format"),
+#     db: Session = Depends(get_db),
+#     current_user: CurrentUser = Depends(require_admin)
+# ):
+#     """Export individual employee monthly attendance as CSV"""
+#     from datetime import datetime as dt_mod
+#     import calendar as cal_mod
 
-    year, mon = map(int, month.split("-"))
-    start_date = date(year, mon, 1)
-    _, days_in = cal_mod.monthrange(year, mon)
-    end_date = date(year, mon, days_in)
+#     year, mon = map(int, month.split("-"))
+#     start_date = date(year, mon, 1)
+#     _, days_in = cal_mod.monthrange(year, mon)
+#     end_date = date(year, mon, days_in)
 
-    generator = ReportGenerator(db)
-    report = generator.get_individual_report(
-        employee_code=employee_code,
-        start_date=start_date,
-        end_date=end_date
-    )
+#     generator = ReportGenerator(db)
+#     report = generator.get_individual_report(
+#         employee_code=employee_code,
+#         start_date=start_date,
+#         end_date=end_date
+#     )
 
-    if not report:
-        raise HTTPException(status_code=404, detail="Employee not found")
+#     if not report:
+#         raise HTTPException(status_code=404, detail="Employee not found")
 
-    output = io.StringIO()
-    writer = csv.writer(output)
+#     output = io.StringIO()
+#     writer = csv.writer(output)
 
-    month_label = start_date.strftime('%B %Y')
-    writer.writerow([f'Monthly Report - {month_label}'])
-    writer.writerow(['Code', report['employee']['code']])
-    writer.writerow(['Name', report['employee']['name']])
-    writer.writerow(['Work Mode', report['employee']['work_mode']])
-    writer.writerow(['Department', report['employee']['department'] or ''])
-    writer.writerow([])
-    writer.writerow(['Date', 'Day', 'First In', 'Last Out', 'Total Hours', 'Status'])
+#     month_label = start_date.strftime('%B %Y')
+#     writer.writerow([f'Monthly Report - {month_label}'])
+#     writer.writerow(['Code', report['employee']['code']])
+#     writer.writerow(['Name', report['employee']['name']])
+#     writer.writerow(['Work Mode', report['employee']['work_mode']])
+#     writer.writerow(['Department', report['employee']['department'] or ''])
+#     writer.writerow([])
+#     writer.writerow(['Date', 'Day', 'First In', 'Last Out', 'Total Hours', 'Status'])
 
-    for day in report['daily_records']:
-        writer.writerow([
-            day['date'],
-            day['day'],
-            day['first_in'],
-            day['last_out'],
-            day['total_hours'],
-            day['status']
-        ])
+#     for day in report['daily_records']:
+#         writer.writerow([
+#             day['date'],
+#             day['day'],
+#             day['first_in'],
+#             day['last_out'],
+#             day['total_hours'],
+#             day['status']
+#         ])
 
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={
-            "Content-Disposition": f"attachment; filename={employee_code}_{month}_report.csv"
-        }
-    )
+#     output.seek(0)
+#     return StreamingResponse(
+#         iter([output.getvalue()]),
+#         media_type="text/csv",
+#         headers={
+#             "Content-Disposition": f"attachment; filename={employee_code}_{month}_report.csv"
+#         }
+#     )
 
 
 @router.get("/export/all-employees")
@@ -273,7 +275,7 @@ async def export_all_employees_csv(
     week_start: Optional[str] = Query(None, description="Week start date (YYYY-MM-DD)"),
     sort_by: str = Query("name", description="Sort by: name, compliance, hours, status"),
     sort_order: str = Query("asc", description="Sort order: asc, desc"),
-    status_filter: Optional[str] = Query(None, description="Filter by status: RED, AMBER, GREEN"),
+    status_filter: Optional[str] = Query(None, description="Filter by status: Non-Compliance, Mid-Compliance, Compliance"),
     work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID, WFH"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin)

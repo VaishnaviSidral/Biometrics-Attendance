@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, Search, Calendar } from "lucide-react";
 import api from "../api/client";
 import { useViewMonthDate } from "../contexts/DateContext";
+import { statusToCssClass } from "../components/StatusBadge";
 
 export default function MonthlyReport({ workMode }) {
     const { monthString, setMonthString } = useViewMonthDate('monthlyReport');
@@ -68,7 +69,7 @@ export default function MonthlyReport({ workMode }) {
             const filename = `monthly_report_${monthName}_${year}.csv`;
 
             await api.exportMonthlyReportCSV(
-                { month, search: debouncedSearch, work_mode: workMode },
+                { month, work_mode: workMode },
                 filename
             );
         } catch (err) {
@@ -215,9 +216,8 @@ export default function MonthlyReport({ workMode }) {
                                     const modeColors = { WFO: "#3b82f6", HYBRID: "#8b5cf6", WFH: "#06b6d4", CLIENT_OFFICE: "#f59e0b" };
 
                                     const compliance = row.compliance_percentage || 0;
-                                    // Use compliance_status from backend (hour-based) for color
-                                    const statusMap = { "Compliance": "green", "Mid-Compliance": "amber", "Non-Compliance": "red" };
-                                    const statusClass = statusMap[row.compliance_status] || "red";
+                                    // Use compliance_status from backend (hour-based) for CSS class
+                                    const statusClass = statusToCssClass(row.compliance_status);
 
                                     const status = row.compliance_status || "Non-Compliance";
                                     const statusColors = {

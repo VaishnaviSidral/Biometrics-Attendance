@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
-import StatusBadge from '../components/StatusBadge';
+import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
 import { useViewWeekDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
@@ -156,12 +156,12 @@ export default function AllEmployees() {
             const empWorkMode = (emp.work_mode || 'WFO').toUpperCase();
             if (dashboardFilter === 'non_exempt') {
                 if (empWorkMode === 'WFH') return false;
-            } else if (dashboardFilter === 'compliant') {
+            } else             if (dashboardFilter === 'compliant') {
                 if (empWorkMode === 'WFH') return false;
-                if (emp.status !== 'GREEN') return false;
+                if (emp.status !== 'Compliance') return false;
             } else if (dashboardFilter === 'non_compliant') {
                 if (empWorkMode === 'WFH') return false;
-                if (emp.status === 'GREEN') return false;
+                if (emp.status === 'Compliance') return false;
             }
         }
 
@@ -182,13 +182,7 @@ export default function AllEmployees() {
 
         // Status filter
         if (statusFilter) {
-            if (statusFilter === 'compliant') {
-                if (emp.status === 'RED') return false;
-            } else if (statusFilter === 'RED') {
-                if (emp.status !== 'RED') return false;
-            } else {
-                if (emp.status !== statusFilter) return false;
-            }
+            if (emp.status !== statusFilter) return false;
         }
 
         // BU Head filter
@@ -281,7 +275,7 @@ export default function AllEmployees() {
                     key: 'status',
                     label: 'Status',
                     sortable: true,
-                    render: () => <StatusBadge status="GREEN" />
+                    render: () => <StatusBadge status="Compliance" />
                 }
             ];
         }
@@ -312,7 +306,7 @@ export default function AllEmployees() {
                     <div className="flex items-center gap-3">
                         <div className="progress-bar" style={{ width: '80px' }}>
                             <div
-                                className={`progress-fill ${row.status?.toLowerCase()}`}
+                                className={`progress-fill ${statusToCssClass(row.status)}`}
                                 style={{ width: `${Math.min(value, 100)}%` }}
                             />
                         </div>
@@ -404,7 +398,7 @@ export default function AllEmployees() {
                 <div className="flex items-center gap-3">
                     <div className="progress-bar" style={{ width: '80px' }}>
                         <div
-                            className={`progress-fill ${row.status?.toLowerCase()}`}
+                            className={`progress-fill ${statusToCssClass(row.status)}`}
                             style={{ width: `${Math.min(value, 100)}%` }}
                         />
                     </div>
@@ -537,9 +531,9 @@ export default function AllEmployees() {
                             onChange={(e) => setStatusFilter(e.target.value)}
                         >
                             <option value="">All Status</option>
-                            <option value="GREEN">Compliance</option>
-                            <option value="AMBER">Mid-Compliance</option>
-                            <option value="RED">Non-Compliance</option>
+                            <option value="Compliance">Compliance</option>
+                            <option value="Mid-Compliance">Mid-Compliance</option>
+                            <option value="Non-Compliance">Non-Compliance</option>
                         </select>
                     </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
@@ -606,8 +600,8 @@ export default function AllEmployees() {
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-green-bg)', borderColor: 'var(--color-status-green-border)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-green)' }}>
                         {filteredEmployees.filter(e => {
-                            if (!workModeTab) return (e.work_mode || 'WFO') !== 'WFH' && e.status === 'GREEN';
-                            return e.status === 'GREEN';
+                            if (!workModeTab) return (e.work_mode || 'WFO') !== 'WFH' && e.status === 'Compliance';
+                            return e.status === 'Compliance';
                         }).length}
                     </div>
                     <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Compliance (≥{complianceSettings?.compliance_hours ?? 9}h)</div>
@@ -616,8 +610,8 @@ export default function AllEmployees() {
                 <div className="card" style={{ textAlign: 'center', padding: 'var(--spacing-4)', background: 'var(--color-status-red-bg)', borderColor: 'var(--color-status-red-border)' }}>
                     <div style={{ fontSize: 'var(--font-size-3xl)', fontWeight: 'bold', color: 'var(--color-status-red)' }}>
                     {filteredEmployees.filter(e => {
-                        if (!workModeTab) return (e.work_mode || 'WFO') !== 'WFH' && e.status === 'RED';
-                        return e.status === 'RED';
+                        if (!workModeTab) return (e.work_mode || 'WFO') !== 'WFH' && e.status === 'Non-Compliance';
+                        return e.status === 'Non-Compliance';
                     }).length}
                     </div>
                     <div className="text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>Non-Compliance (&lt;{complianceSettings?.mid_compliance_hours ?? 7}h)</div>
