@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Users,
-    Clock,
-    Building2,
+    UserCheck,
+    ShieldCheck,
+    ShieldX,
     AlertTriangle,
-    TrendingUp,
     Calendar,
     X
 } from 'lucide-react';
@@ -25,58 +25,74 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
-import DataTable from '../components/DataTable';
+import { useViewWeekDate } from '../contexts/DateContext';
+import {
+    getCurrentISOWeek,
+    generateISOWeeks,
+    isoWeekToDateString,
+    getYearRange,
+} from '../utils/isoWeek';
 
-const COLORS = {
-    GREEN: '#10b981',
-    AMBER: '#f59e0b',
-    RED: '#ef4444',
-    BLUE: '#3b82f6',
-    GRAY: '#9ca3af'
+// Visual chart colors — display-only, no business logic
+const CHART_COLORS = {
+    compliance: '#10b981',
+    midCompliance: '#f59e0b',
+    nonCompliance: '#ef4444',
+    blue: '#3b82f6',
+    gray: '#9ca3af'
 };
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { weekYear, weekValue, setWeekYear, setWeekValue } = useViewWeekDate('dashboard');
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
-    const [employees, setEmployees] = useState([]);
+    const [complianceStats, setComplianceStats] = useState(null);
+    const [complianceSettings, setComplianceSettings] = useState(null);
     const [error, setError] = useState(null);
 
-    // New State for Chart & Modal
-    const [weeks, setWeeks] = useState([]);
-    const [selectedWeek, setSelectedWeek] = useState('');
+    // Calendar-based year + week selection (from global context)
+    const currentISO = getCurrentISOWeek();
+    const selectedYear = weekYear;
+    const selectedWeekValue = weekValue;
+    const setSelectedYear = setWeekYear;
+    const setSelectedWeekValue = setWeekValue;
+
+    // Generate ISO weeks for the selected year (calendar-driven, never from DB)
+    const years = useMemo(() => getYearRange(), []);
+    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+
+    // Chart & modal state
     const [chartData, setChartData] = useState([]);
     const [modalOpen, setModalOpen] = useState(false);
     const [modalLoading, setModalLoading] = useState(false);
     const [modalData, setModalData] = useState({ title: '', employees: [] });
 
+    // Convert ISO week value to YYYY-MM-DD for API calls
+    const weekStartDate = useMemo(
+        () => isoWeekToDateString(selectedWeekValue),
+        [selectedWeekValue]
+    );
+
+    // Fetch dashboard summary and settings once on mount
     useEffect(() => {
-        fetchInitialData();
+        fetchSummary();
+        api.getSettings().then(setComplianceSettings).catch(err => console.error('Error fetching settings:', err));
     }, []);
 
+    // Fetch chart + compliance data whenever week selection changes
     useEffect(() => {
-        if (selectedWeek || weeks.length > 0) {
+        if (weekStartDate) {
             fetchChartData();
+            fetchComplianceStats();
         }
-    }, [selectedWeek, weeks]);
+    }, [weekStartDate]);
 
-    const fetchInitialData = async () => {
+    const fetchSummary = async () => {
         try {
             setLoading(true);
-            const [dashboardData, employeesData, weeksData] = await Promise.all([
-                api.getDashboardSummary(),
-                api.getAllEmployeesReport({ sort_by: 'compliance', sort_order: 'asc' }),
-                api.getAvailableWeeks()
-            ]);
-
+            const dashboardData = await api.getDashboardSummary();
             setSummary(dashboardData);
-            setEmployees(employeesData.employees || []);
-            setWeeks(weeksData.weeks || []);
-
-            // Set default week if available
-            if (weeksData.weeks && weeksData.weeks.length > 0 && !selectedWeek) {
-                setSelectedWeek(weeksData.weeks[0].week_start);
-            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -86,13 +102,40 @@ export default function Dashboard() {
 
     const fetchChartData = async () => {
         try {
-            const params = selectedWeek ? { week_start: selectedWeek } : {};
+            const params = weekStartDate ? { week_start: weekStartDate } : {};
             const data = await api.getDashboardStats(params);
             if (data && data.stats) {
                 setChartData(data.stats);
+            } else {
+                setChartData([]);
             }
         } catch (err) {
             console.error('Error fetching chart stats:', err);
+            setChartData([]);
+        }
+    };
+
+    const fetchComplianceStats = async () => {
+        try {
+            const params = weekStartDate ? { week_start: weekStartDate } : {};
+            const data = await api.getWeeklyComplianceStats(params);
+            setComplianceStats(data);
+        } catch (err) {
+            console.error('Error fetching compliance stats:', err);
+            setComplianceStats(null);
+        }
+    };
+
+    // When year changes, auto-select the first week of that year
+    // (or current week if it's the current year)
+    const handleYearChange = (newYear) => {
+        setSelectedYear(newYear);
+        if (newYear === currentISO.year) {
+            setSelectedWeekValue(
+                `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
+            );
+        } else {
+            setSelectedWeekValue(`${newYear}-W01`);
         }
     };
 
@@ -101,14 +144,11 @@ export default function Dashboard() {
         try {
             setModalLoading(true);
             setModalOpen(true);
-            // type is 'WFO' or 'WFH'
             const dateStr = data.date;
-
             setModalData({
                 title: `${type} Employees - ${new Date(dateStr).toLocaleDateString()}`,
                 employees: []
             });
-
             const details = await api.getDailyDetails({ date: dateStr, status: type });
             setModalData({
                 title: `${type} Employees - ${new Date(dateStr).toLocaleDateString()}`,
@@ -122,63 +162,16 @@ export default function Dashboard() {
         }
     };
 
-    const columns = [
-        {
-            key: 'employee_name',
-            label: 'Employee',
-            sortable: true,
-            render: (value, row) => (
-                <div className="cell-employee">
-                    <div className="employee-avatar">
-                        {value?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="employee-info">
-                        <span className="employee-name">{value}</span>
-                        <span className="employee-code">ID: {row.employee_code}</span>
-                    </div>
-                </div>
-            )
-        },
-        {
-            key: 'total_office_hours',
-            label: 'Office Hours',
-            sortable: true
-        },
-        {
-            key: 'wfo_days',
-            label: 'WFO Days',
-            sortable: true
-        },
-        {
-            key: 'compliance_percentage',
-            label: 'Compliance',
-            sortable: true,
-            render: (value, row) => (
-                <div className="flex items-center gap-3">
-                    <div className="progress-bar" style={{ width: '100px' }}>
-                        <div
-                            className={`progress-fill ${row.status?.toLowerCase()}`}
-                            style={{ width: `${Math.min(value, 100)}%` }}
-                        />
-                    </div>
-                    <span className="font-medium">{value?.toFixed(1)}%</span>
-                </div>
-            )
-        },
-        {
-            key: 'status',
-            label: 'Status',
-            sortable: true,
-            render: (value) => <StatusBadge status={value} />
-        }
-    ];
-
-    // Prepare pie chart data
-    const pieData = summary?.status_distribution ? [
-        { name: 'Excellent', value: summary.status_distribution.GREEN, color: COLORS.GREEN },
-        { name: 'Meets Target', value: summary.status_distribution.AMBER, color: COLORS.AMBER },
-        { name: 'Below Target', value: summary.status_distribution.RED, color: COLORS.RED }
+    // Pie chart data
+    const pieData = complianceStats ? [
+        { name: 'Compliance', value: complianceStats.compliant_employees || 0, color: CHART_COLORS.compliance },
+        { name: 'Mid-Compliance', value: complianceStats.partial_compliant_employees || 0, color: CHART_COLORS.midCompliance },
+        { name: 'Non-Compliance', value: complianceStats.non_compliant_employees || 0, color: CHART_COLORS.nonCompliance }
     ].filter(d => d.value > 0) : [];
+    
+
+    // Week label for the subtitle
+    const selectedWeekObj = isoWeeks.find(w => w.value === selectedWeekValue);
 
     if (loading) {
         return (
@@ -194,7 +187,7 @@ export default function Dashboard() {
                 <AlertTriangle size={64} style={{ color: 'var(--color-status-amber)' }} />
                 <h2 className="empty-state-title">Unable to load dashboard</h2>
                 <p className="empty-state-text">{error}</p>
-                <button className="btn btn-primary" onClick={fetchInitialData}>
+                <button className="btn btn-primary" onClick={fetchSummary}>
                     Retry
                 </button>
             </div>
@@ -209,37 +202,34 @@ export default function Dashboard() {
                     <div>
                         <h1 className="page-title">Dashboard</h1>
                         <p className="page-subtitle">
-                            {selectedWeek && weeks.length > 0
-                                ? (() => {
-                                    const selectedWeekObj = weeks.find(w => w.week_start === selectedWeek);
-                                    if (selectedWeekObj) {
-                                        return `Week of ${new Date(selectedWeekObj.week_start).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric'
-                                        })} - ${new Date(selectedWeekObj.week_end).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric'
-                                        })}`;
-                                    }
-                                    return 'Attendance Overview';
-                                })()
+                            {selectedWeekObj
+                                ? `${selectedWeekObj.label}`
                                 : 'Attendance Overview'}
                         </p>
                     </div>
 
-                    {/* Week Filter */}
+                    {/* Year + Week Filters */}
                     <div className="flex items-center gap-2">
                         <Calendar size={18} className="text-muted" />
                         <select
                             className="form-input form-select"
-                            value={selectedWeek}
-                            onChange={(e) => setSelectedWeek(e.target.value)}
-                            style={{ width: '200px' }}
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(Number(e.target.value))}
+                            style={{ width: '100px' }}
                         >
-                            {weeks.map((week) => (
-                                <option key={week.week_start} value={week.week_start}>
-                                    {week.label}
+                            {years.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="form-input form-select"
+                            value={selectedWeekValue}
+                            onChange={(e) => setSelectedWeekValue(e.target.value)}
+                            style={{ width: '300px' }}
+                        >
+                            {isoWeeks.map((w) => (
+                                <option key={w.value} value={w.value}>
+                                    {w.label}
                                 </option>
                             ))}
                         </select>
@@ -247,50 +237,37 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* Summary Cards */}
+            {/* Summary Cards – Weekly Compliance Stats */}
             <div className="summary-cards">
                 <SummaryCard
                     icon={Users}
-                    value={summary?.total_employees || 0}
+                    value={complianceStats?.total_employees ?? summary?.total_employees ?? 0}
                     label="Total Employees"
-                    onClick={() => {
-                        setModalData({
-                            title: 'All Employees',
-                            employees: employees
-                        });
-                        setModalOpen(true);
-                    }}
+                    description="All employees registered in the system."
+                    onClick={() => navigate(`/employees${weekStartDate ? `?week_start=${weekStartDate}` : ''}`)}
                 />
                 <SummaryCard
-                    icon={TrendingUp}
-                    value={`${summary?.avg_compliance?.toFixed(1) || 0}%`}
-                    label="Average Compliance"
-                    status={
-                        (summary?.avg_compliance || 0) >= 90 ? 'green' :
-                            (summary?.avg_compliance || 0) >= 70 ? 'amber' : 'red'
-                    }
+                    icon={UserCheck}
+                    value={complianceStats?.non_exempt_employees ?? 0}
+                    label="Non-Exempted Employees"
+                    description="WFO + Hybrid employees (excludes WFH)."
+                    onClick={() => navigate(`/employees?filter=non_exempt${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
                 <SummaryCard
-                    icon={Building2}
-                    value={summary?.total_wfo_days || 0}
-                    label="Total WFO Days"
+                    icon={ShieldCheck}
+                    value={complianceStats?.compliant_employees ?? 0}
+                    label="Compliant to WFO Policy"
+                    description={`Non-exempt employees meeting WFO policy (≥${complianceSettings?.compliance_hours ?? 9}h).`}
                     status="green"
+                    onClick={() => navigate(`/employees?filter=compliant${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
                 <SummaryCard
-                    icon={AlertTriangle}
-                    value={summary?.alerts || 0}
-                    label="Employees Below Target"
+                    icon={ShieldX}
+                    value={complianceStats?.non_compliant_employees ?? 0}
+                    label="Non-Compliant to WFO Policy"
+                    description={`Non-exempt employees below WFO policy (<${complianceSettings?.compliance_hours ?? 9}h).`}
                     status="red"
-                    onClick={() => {
-                        const belowTarget = employees.filter(emp =>
-                            emp.status?.toLowerCase() === 'red'
-                        );
-                        setModalData({
-                            title: 'Employees Below Target',
-                            employees: belowTarget
-                        });
-                        setModalOpen(true);
-                    }}
+                    onClick={() => navigate(`/employees?filter=non_compliant${weekStartDate ? `&week_start=${weekStartDate}` : ''}`)}
                 />
             </div>
 
@@ -302,40 +279,46 @@ export default function Dashboard() {
                         <h3 className="chart-title">Daily Attendance (WFO vs WFH)</h3>
                         <span className="text-muted text-xs">Click bars to see details</span>
                     </div>
-                    <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                            <XAxis dataKey="day" stroke="var(--color-text-muted)" fontSize={12} />
-                            <YAxis stroke="var(--color-text-muted)" fontSize={12} />
-                            <Tooltip
-                                contentStyle={{
-                                    background: 'var(--color-surface)',
-                                    border: '1px solid var(--color-border)',
-                                    borderRadius: '8px'
-                                }}
-                                cursor={{ fill: 'var(--color-bg-subtle)' }}
-                            />
-                            <Legend />
-                            <Bar
-                                dataKey="wfo"
-                                name="Work From Office"
-                                stackId="a"
-                                fill={COLORS.GREEN}
-                                radius={[0, 0, 4, 4]}
-                                onClick={(data) => handleBarClick(data, 'WFO')}
-                                style={{ cursor: 'pointer' }}
-                            />
-                            <Bar
-                                dataKey="wfh"
-                                name="WFH / Absent"
-                                stackId="a"
-                                fill={COLORS.GRAY}
-                                radius={[4, 4, 0, 0]}
-                                onClick={(data) => handleBarClick(data, 'WFH')}
-                                style={{ cursor: 'pointer' }}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
+                    {chartData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                                <XAxis dataKey="day" stroke="var(--color-text-muted)" fontSize={12} />
+                                <YAxis stroke="var(--color-text-muted)" fontSize={12} />
+                                <Tooltip
+                                    contentStyle={{
+                                        background: 'var(--color-surface)',
+                                        border: '1px solid var(--color-border)',
+                                        borderRadius: '8px'
+                                    }}
+                                    cursor={{ fill: 'var(--color-bg-subtle)' }}
+                                />
+                                <Legend />
+                                <Bar
+                                    dataKey="wfo"
+                                    name="Work From Office"
+                                    stackId="a"
+                                    fill={CHART_COLORS.compliance}
+                                    radius={[0, 0, 4, 4]}
+                                    onClick={(data) => handleBarClick(data, 'WFO')}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                <Bar
+                                    dataKey="wfh"
+                                    name="WFH / Absent"
+                                    stackId="a"
+                                    fill={CHART_COLORS.gray}
+                                    radius={[4, 4, 0, 0]}
+                                    onClick={(data) => handleBarClick(data, 'WFH')}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="empty-state" style={{ padding: 'var(--spacing-8)' }}>
+                            <p className="text-muted">No attendance data for this week</p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Compliance Distribution */}
@@ -378,27 +361,6 @@ export default function Dashboard() {
                         </div>
                     )}
                 </div>
-            </div>
-
-            {/* Employees Table */}
-            <div className="table-container mt-8">
-                <div className="table-header">
-                    <h3 className="table-title">Employee Attendance Overview</h3>
-                    <div className="table-actions">
-                        <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => navigate('/employees')}
-                        >
-                            View All
-                        </button>
-                    </div>
-                </div>
-                <DataTable
-                    columns={columns}
-                    data={employees.slice(0, 5)}
-                    onRowClick={(row) => navigate(`/employee/${row.employee_code}`)}
-                    emptyMessage="No employee data yet. Upload attendance data to see reports."
-                />
             </div>
 
             {/* Drill Down Modal */}
@@ -463,13 +425,13 @@ export default function Dashboard() {
                                                         <div className="text-sm text-muted">ID: {emp.employee_code}</div>
                                                     </td>
                                                     <td style={{ padding: '12px' }}>
-                                                        <span className={emp.status === 'PRESENT' ? 'text-green font-medium' : 'text-muted'}>
-                                                            {emp.status}
-                                                        </span>
+                                                        <StatusBadge status={emp.status} />
                                                     </td>
                                                     <td style={{ padding: '12px' }}>{emp.hours}</td>
                                                     <td style={{ padding: '12px' }}>
-                                                        {emp.in_time} - {emp.out_time}
+                                                        {(emp.in_time && emp.out_time && emp.in_time !== '-' && emp.out_time !== '-')
+                                                            ? `${emp.in_time} - ${emp.out_time}`
+                                                            : '-'}
                                                     </td>
                                                 </tr>
                                             ))

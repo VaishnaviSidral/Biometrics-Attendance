@@ -1,189 +1,211 @@
-# Biometrics Attendance HR System
+# Biometric Attendance & Compliance System – Simple Implementation README
 
-A production-ready, admin-only web application that processes fingerprint biometric attendance data and generates automated, real-time HR attendance reports.
-
-## 🎯 Features
-
-- **Data Import**: Upload biometric attendance logs (CSV/Excel)
-- **Automatic Calculations**: IN/OUT pairing, daily totals, weekly aggregation
-- **Hybrid Work Support**: Configurable WFO/WFH policy
-- **Color-Coded Reports**: RED (<70%), AMBER (70-90%), GREEN (>90%)
-- **Multiple Reports**:
-  - Individual Employee Report
-  - All Employees Summary
-  - WFO Compliance Report
-- **Export**: Download reports as CSV
-
-## 🛠 Technology Stack
-
-- **Frontend**: React + Vite
-- **Backend**: Python FastAPI
-- **Database**: SQLite (can be migrated to MySQL)
-- **Charts**: Recharts
-
-## 📁 Project Structure
-
-```
-Biometrics Attendence/
-├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration settings
-│   ├── database.py          # Database connection
-│   ├── models/              # SQLAlchemy models
-│   ├── services/            # Business logic
-│   └── routers/             # API endpoints
-│
-├── frontend/
-│   ├── src/
-│   │   ├── api/             # API client
-│   │   ├── components/      # Reusable components
-│   │   └── pages/           # Page components
-│   └── index.html
-│
-└── sample_data/
-    └── biometric_export.csv # Sample test data
-```
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.9+
-- Node.js 18+
-- npm or yarn
-
-### Backend Setup
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the server
-python main.py
-```
-
-The API will be available at `http://localhost:8000`
-
-### Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-```
-
-The dashboard will be available at `http://localhost:5173`
-
-## 📊 API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/upload/` | Upload attendance file |
-| GET | `/api/employees/` | List all employees |
-| GET | `/api/reports/dashboard` | Dashboard summary |
-| GET | `/api/reports/all-employees` | All employees report |
-| GET | `/api/reports/individual/{code}` | Individual report |
-| GET | `/api/reports/wfo-compliance` | WFO compliance report |
-| GET | `/api/reports/export/*` | Export reports as CSV |
-
-## ⚙️ Configuration
-
-The default hybrid work policy settings:
-
-| Setting | Default Value |
-|---------|---------------|
-| Expected hours per WFO day | 8 hours |
-| WFO days per week | 2 days |
-| WFH days per week | 3 days |
-| RED threshold | <70% |
-| AMBER threshold | 70-90% |
-| GREEN threshold | >90% |
-
-These can be modified in `backend/config.py` or via the Settings page.
-
-## 📝 Data Format
-
-The system accepts CSV/Excel files with the following columns:
-
-| Column | Required | Description |
-|--------|----------|-------------|
-| DATE | Yes | Date (DD/MM/YYYY) |
-| CODE | Yes | Employee ID |
-| NAME | Yes | Employee name |
-| IN | Yes | Clock-in time (HH:MM) |
-| OUT | Yes | Clock-out time (HH:MM) |
-| TOTAL | No | Total hours (HH:MM:SS) |
-| SHIFT | No | Shift number |
-| LATE | No | Late indicator |
-| OT | No | Overtime |
-| REMARK | No | A=Absent, P=Present |
-
-## 🎨 Color Status Legend
-
-| Color | Range | Meaning |
-|-------|-------|---------|
-| 🔴 RED | <70% | Below Expectation |
-| 🟡 AMBER | 70-90% | Meets Expectation |
-| 🟢 GREEN | >90% | Excellent |
-
-## 📱 Screenshots
-
-### Dashboard
-Modern dashboard with summary cards, compliance charts, and employee overview.
-
-### Upload Data
-Drag-and-drop file upload with format validation and processing feedback.
-
-### All Employees Report
-Filterable and sortable table with color-coded compliance status.
-
-### WFO Compliance Report
-Detailed hybrid work policy compliance tracking.
-
-## 🔒 Security
-
-This is an admin-only internal tool. Authentication is not implemented in this version but can be added:
-
-1. Add FastAPI JWT authentication
-2. Implement login page in React
-3. Protect all routes with auth middleware
-
-## 🧪 Testing
-
-### Backend Tests
-```bash
-cd backend
-pytest tests/ -v
-```
-
-### Frontend Tests
-```bash
-cd frontend
-npm test
-```
-
-## 📄 License
-
-MIT License - feel free to use this project for your organization's HR attendance management.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+This file is for **implementation only**.
+Cursor must follow this directly.
+No extra logic, no over-engineering.
 
 ---
 
-Built with ❤️ for HR teams managing hybrid workforces.
+# 🎯 Goal
+
+Build a biometric attendance system where:
+
+* Login with email and password can be anything below this i want google oauth
+* Login is done using **Google OAuth**
+* User validation is done from **Redmine DB (READ ONLY)**
+* Attendance + compliance system uses **Biometric DB (READ/WRITE)**
+* Admin and Employees have different access
+* Admin uploads biometric Excel files
+* System calculates attendance + compliance automatically
+
+---
+
+# 🔐 Login Flow (Simple)
+
+```
+Google Sign-In
+   ↓
+Get user email
+   ↓
+Check in Redmine DB (READ ONLY)
+   ↓
+If email exists → allow login
+Else → block login
+   ↓
+Check in Biometric DB
+   ↓
+If email in admins table → role = ADMIN
+Else → role = EMPLOYEE
+   ↓
+Create session/JWT
+```
+
+---
+
+# 🗄 Databases
+
+## 1) Redmine DB (READ ONLY)
+
+Used only for login validation.
+Never write to this DB.
+Never change schema.
+
+**Connection config:**
+
+```python
+db_readonly_host = "localhost"
+db_readonly_port = 3306
+db_readonly_name = "redmine_readonly"
+db_readonly_user = "root"
+db_readonly_password = "root"
+```
+
+Used fields:
+
+* id
+* email
+* firstname
+* lastname
+
+---
+
+## 2) Biometric DB (READ/WRITE)
+
+Used for whole system logic.
+
+### admins table
+
+```
+id
+email
+is_admin
+created_at
+```
+
+### employees table
+
+```
+id
+name
+email
+work_mode   (WFO / HYBRID / WFH)
+```
+---
+
+# 🧑‍💼 Admin
+
+Admin can:
+
+* Upload biometric Excel
+* See all employees
+* See dashboards
+* See compliance
+* Manage work_mode
+
+---
+
+# 🧑‍💻 Employee
+
+Employee can:
+
+* Login
+* See own attendance
+* See own compliance
+
+---
+
+# 📤 Excel Upload Flow
+
+```
+Admin uploads Excel
+→ Read punch-in / punch-out
+→ Store in punches table
+→ Calculate daily hours
+→ Store in attendance_daily
+→ Calculate weekly compliance
+→ Store in compliance_weekly
+```
+
+---
+
+# 📊 Compliance Rules
+
+## WFO
+
+* 5 days office
+* 45 hours/week
+* 9 hours/day
+
+## Hybrid
+
+* 3 days office
+* 27 hours/week
+* 9 hours/day
+
+## WFH
+
+* Only tracking (rules configurable later)
+
+---
+
+# 📈 Status Rules
+
+```
+Compliance     >= 90%
+Mid-Compliance = 60% – 89%
+Non-Compliance < 60%
+```
+
+---
+
+# 🖥 Dashboard
+* For showing and calculating tab wise and mode wise calculation make the use of biometric employees where i have employee details of working mode so that we can segragate and calculate compliance based on work mode
+
+In all employees Tab below the display grids add 3 tabs as :
+
+* WFO - table should have Employee ,Total hours, WFO days variable/5, Expected hours,Compliance,Status
+* Hybrid - table should have Employee ,Total hours, WFO days variable/3, Expected hours,Compliance,Status
+* WFH - table should have Employee,Total hours,Compliance,Status should be 100% only for WFH 
+
+---
+
+# 🔒 Rules for Cursor
+
+* Redmine DB is READ ONLY
+* Biometric DB is READ/WRITE
+* Login only via Google OAuth
+* Validate user only via Redmine DB
+* Role only from biometric.admins
+* Employee data only from biometric.employees
+* No passwords
+* No local auth
+* No DB merging
+
+---
+
+# ❌ Do NOT do
+
+* Do not write in Redmine DB
+* Do not create login tables
+* Do not store passwords
+* Do not hardcode roles
+* Do not bypass Google OAuth
+
+---
+
+# ✅ Result
+
+System will:
+
+* Allow only Redmine users
+* Give admin access to selected users
+* Upload biometric data
+* Auto-calculate attendance
+* Auto-calculate compliance
+* Show dashboards
+* Replace manual Excel work
+
+---
+
+This file is enough for implementation.
+Follow only this.

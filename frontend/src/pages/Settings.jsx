@@ -25,12 +25,14 @@ export default function Settings() {
     const handleSave = async () => {
         try {
             await api.updateSettings({
-                expected_hours_per_day: settings?.expected_hours_per_day || 8,
-                wfo_days_per_week: settings?.wfo_days_per_week || 2,
-                wfh_days_per_week: settings?.wfh_days_per_week || 3,
-                threshold_red: settings?.thresholds?.red || 70,
+                expected_hours_per_day: settings?.expected_hours_per_day || 9,
+                wfo_days_per_week: settings?.wfo_days_per_week || 5,
+                hybrid_days_per_week: settings?.hybrid_days_per_week || 3,
+                threshold_red: settings?.thresholds?.red || 60,
                 threshold_amber: settings?.thresholds?.amber || 90,
-                min_hours_for_present: settings?.min_hours_for_present || 6
+                compliance_hours: settings?.compliance_hours || 9,
+                mid_compliance_hours: settings?.mid_compliance_hours || 7,
+                non_compliance_hours: settings?.non_compliance_hours || 6
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 3000);
@@ -48,19 +50,26 @@ export default function Settings() {
         );
     }
 
+    const wfoDays = settings?.wfo_days_per_week || 5;
+    const hybridDays = settings?.hybrid_days_per_week || 3;
+    const hoursPerDay = settings?.expected_hours_per_day || 9;
+    const complianceHrs = settings?.compliance_hours || 9;
+    const midComplianceHrs = settings?.mid_compliance_hours || 7;
+    const nonComplianceHrs = settings?.non_compliance_hours || 6;
+
     return (
         <div className="animate-fade-in">
             {/* Page Header */}
             <div className="page-header">
                 <h1 className="page-title">Settings</h1>
                 <p className="page-subtitle">
-                    Configure attendance policies and thresholds
+                    Configure attendance policies and compliance rules
                 </p>
             </div>
 
-            {/* Work Policy Settings */}
+            {/* Work Mode Policy */}
             <div className="card mb-6">
-                <h3 className="card-title mb-6">Hybrid Work Policy</h3>
+                <h3 className="card-title mb-6">Work Mode Policies</h3>
 
                 <div style={{
                     display: 'grid',
@@ -68,11 +77,11 @@ export default function Settings() {
                     gap: 'var(--spacing-6)'
                 }}>
                     <div className="form-group">
-                        <label className="form-label">Expected Hours Per WFO Day</label>
+                        <label className="form-label">Expected Hours Per Day</label>
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.expected_hours_per_day || 8}
+                            value={hoursPerDay}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 expected_hours_per_day: parseInt(e.target.value)
@@ -94,126 +103,96 @@ export default function Settings() {
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.wfo_days_per_week || 2}
+                            value={wfoDays}
                             onChange={(e) => setSettings({
                                 ...settings,
                                 wfo_days_per_week: parseInt(e.target.value)
                             })}
                             min="1"
-                            max="5"
+                            max="7"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            Required office days per week
+                            Required office days for WFO employees
                         </p>
                     </div>
 
                     <div className="form-group">
-                        <label className="form-label">WFH Days Per Week</label>
+                        <label className="form-label">Hybrid Days Per Week</label>
                         <input
                             type="number"
                             className="form-input"
-                            value={settings?.wfh_days_per_week || 3}
+                            value={hybridDays}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                wfh_days_per_week: parseInt(e.target.value)
+                                hybrid_days_per_week: parseInt(e.target.value)
                             })}
-                            min="0"
-                            max="5"
+                            min="1"
+                            max="7"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
                             color: 'var(--color-text-muted)',
                             marginTop: 'var(--spacing-1)'
                         }}>
-                            Work from home days per week
+                            Required office days for Hybrid employees
                         </p>
                     </div>
                 </div>
 
-                {/* Calculated Weekly Expected */}
+                {/* Summary */}
                 <div style={{
                     marginTop: 'var(--spacing-6)',
                     padding: 'var(--spacing-4)',
                     background: 'var(--color-surface-elevated)',
-                    borderRadius: 'var(--radius-lg)'
+                    borderRadius: 'var(--radius-lg)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 'var(--spacing-4)'
                 }}>
-                    <p className="text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
-                        Expected Weekly Office Hours:
-                        <span className="font-bold text-primary" style={{ marginLeft: 'var(--spacing-2)' }}>
-                            {(settings?.wfo_days_per_week || 2) * (settings?.expected_hours_per_day || 8)} hours
-                        </span>
-                        <span className="text-muted" style={{ marginLeft: 'var(--spacing-2)' }}>
-                            ({settings?.expected_weekly_minutes || 960} minutes)
-                        </span>
-                    </p>
-                </div>
-
-                {/* Minimum Hours for Present */}
-                <div style={{ marginTop: 'var(--spacing-6)' }}>
-                    <div className="form-group">
-                        <label className="form-label">Minimum Hours for Present</label>
-                        <input
-                            type="number"
-                            className="form-input"
-                            value={settings?.min_hours_for_present || 6}
-                            onChange={(e) => setSettings({
-                                ...settings,
-                                min_hours_for_present: parseInt(e.target.value)
-                            })}
-                            min="1"
-                            max="12"
-                            style={{ maxWidth: '200px' }}
-                        />
-                        <p style={{
-                            fontSize: 'var(--font-size-xs)',
-                            color: 'var(--color-text-muted)',
-                            marginTop: 'var(--spacing-1)'
-                        }}>
-                            Employees must work at least this many hours to be counted as PRESENT for a day
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFO Required</p>
+                        <p className="font-bold" style={{ color: '#3b82f6', fontSize: 'var(--font-size-lg)' }}>
+                            {wfoDays * hoursPerDay}h/week
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
+                            {wfoDays} days × {hoursPerDay} hrs
+                        </p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Hybrid Required</p>
+                        <p className="font-bold" style={{ color: '#8b5cf6', fontSize: 'var(--font-size-lg)' }}>
+                            {hybridDays * hoursPerDay}h/week
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
+                            {hybridDays} days × {hoursPerDay} hrs
+                        </p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>WFH</p>
+                        <p className="font-bold" style={{ color: '#06b6d4', fontSize: 'var(--font-size-lg)' }}>
+                            Exempted
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
+                            Not counted in compliance
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Compliance Definition */}
+            {/* Hour-Based Compliance Thresholds */}
             <div className="card mb-6">
-                <h3 className="card-title mb-4">What is Compliance?</h3>
-                <div style={{
-                    padding: 'var(--spacing-4)',
-                    background: 'var(--color-surface-elevated)',
-                    borderRadius: 'var(--radius-lg)',
+                <h3 className="card-title mb-6">Hour-Based Compliance Thresholds</h3>
+                <p style={{
+                    fontSize: 'var(--font-size-sm)',
+                    color: 'var(--color-text-muted)',
                     marginBottom: 'var(--spacing-4)'
                 }}>
-                    <p style={{ marginBottom: 'var(--spacing-3)', lineHeight: '1.6' }}>
-                        <strong>Compliance Percentage</strong> measures how well an employee meets their expected work hours:
-                    </p>
-                    <div style={{
-                        fontFamily: 'monospace',
-                        background: 'var(--color-surface)',
-                        padding: 'var(--spacing-3)',
-                        borderRadius: 'var(--radius-md)',
-                        marginBottom: 'var(--spacing-3)'
-                    }}>
-                        Compliance % = (Actual Hours Worked ÷ Expected Hours) × 100
-                    </div>
-                    <ul style={{ paddingLeft: 'var(--spacing-4)', lineHeight: '1.8' }}>
-                        <li><strong>Expected Hours</strong> = WFO Days × Hours per WFO Day</li>
-                        <li><strong>Actual Hours</strong> = Total hours employee worked in office</li>
-                        <li>Employees with &gt; 100% compliance have worked overtime</li>
-                    </ul>
-                </div>
-            </div>
-
-            {/* Compliance Thresholds */}
-            <div className="card mb-6">
-                <h3 className="card-title mb-6">Compliance Thresholds (Configurable)</h3>
-
-                <p className="text-muted mb-4" style={{ fontSize: 'var(--font-size-sm)' }}>
-                    Set the percentage thresholds that determine employee compliance status
+                    Configure daily hour thresholds to determine employee compliance status.
+                    Reports update dynamically when these values change.
                 </p>
 
                 <div style={{
@@ -221,109 +200,227 @@ export default function Settings() {
                     gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
                     gap: 'var(--spacing-6)'
                 }}>
-                    {/* Red Threshold Input */}
-                    <div style={{
-                        padding: 'var(--spacing-4)',
-                        background: 'var(--color-status-red-bg)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-status-red-border)'
-                    }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span style={{
-                                width: '12px',
-                                height: '12px',
-                                background: 'var(--color-status-red)',
-                                borderRadius: 'var(--radius-full)'
-                            }}></span>
-                            <span className="font-medium">Below Target (Non-Compliant)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span>&lt;</span>
-                            <input
-                                type="number"
-                                className="form-input"
-                                value={settings?.thresholds?.red || 70}
-                                onChange={(e) => setSettings({
-                                    ...settings,
-                                    thresholds: {
-                                        ...settings?.thresholds,
-                                        red: parseInt(e.target.value)
-                                    }
-                                })}
-                                min="0"
-                                max="100"
-                                style={{ width: '80px', textAlign: 'center' }}
-                            />
-                            <span>%</span>
-                        </div>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Employees below this % need improvement
+                    <div className="form-group">
+                        <label className="form-label" style={{ color: 'var(--color-status-green)' }}>
+                            Compliance Hours
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={complianceHrs}
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                compliance_hours: parseInt(e.target.value)
+                            })}
+                            min="1"
+                            max="24"
+                        />
+                        <p style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--color-text-muted)',
+                            marginTop: 'var(--spacing-1)'
+                        }}>
+                            ≥ {complianceHrs}h → Employee is COMPLIANT
                         </p>
                     </div>
 
-                    {/* Amber Threshold Input */}
-                    <div style={{
-                        padding: 'var(--spacing-4)',
-                        background: 'var(--color-status-amber-bg)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid var(--color-status-amber-border)'
-                    }}>
-                        <div className="flex items-center gap-2 mb-3">
-                            <span style={{
-                                width: '12px',
-                                height: '12px',
-                                background: 'var(--color-status-amber)',
-                                borderRadius: 'var(--radius-full)'
-                            }}></span>
-                            <span className="font-medium">Meets Target (Compliant)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span>{settings?.thresholds?.red || 70}% -</span>
-                            <input
-                                type="number"
-                                className="form-input"
-                                value={settings?.thresholds?.amber || 90}
-                                onChange={(e) => setSettings({
-                                    ...settings,
-                                    thresholds: {
-                                        ...settings?.thresholds,
-                                        amber: parseInt(e.target.value)
-                                    }
-                                })}
-                                min="0"
-                                max="100"
-                                style={{ width: '80px', textAlign: 'center' }}
-                            />
-                            <span>%</span>
-                        </div>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Satisfactory performance range
+                    <div className="form-group">
+                        <label className="form-label" style={{ color: '#f59e0b' }}>
+                            Mid-Compliance Hours
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={midComplianceHrs}
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                mid_compliance_hours: parseInt(e.target.value)
+                            })}
+                            min="1"
+                            max="24"
+                        />
+                        <p style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--color-text-muted)',
+                            marginTop: 'var(--spacing-1)'
+                        }}>
+                            ≥ {midComplianceHrs}h and &lt; {complianceHrs}h → MID-COMPLIANCE
                         </p>
                     </div>
 
-                    {/* Green Threshold (Display Only) */}
+                    <div className="form-group">
+                        <label className="form-label" style={{ color: 'var(--color-status-red)' }}>
+                            Non-Compliance Hours
+                        </label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={nonComplianceHrs}
+                            onChange={(e) => setSettings({
+                                ...settings,
+                                non_compliance_hours: parseInt(e.target.value)
+                            })}
+                            min="0"
+                            max="24"
+                        />
+                        <p style={{
+                            fontSize: 'var(--font-size-xs)',
+                            color: 'var(--color-text-muted)',
+                            marginTop: 'var(--spacing-1)'
+                        }}>
+                            &lt; {midComplianceHrs}h → Non-Compliance
+                        </p>
+                    </div>
+                </div>
+
+                {/* Summary */}
+                <div style={{
+                    marginTop: 'var(--spacing-6)',
+                    padding: 'var(--spacing-4)',
+                    background: 'var(--color-surface-elevated)',
+                    borderRadius: 'var(--radius-lg)',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: 'var(--spacing-4)'
+                }}>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Compliance</p>
+                        <p className="font-bold" style={{ color: 'var(--color-status-green)', fontSize: 'var(--font-size-lg)' }}>
+                            ≥ {complianceHrs}h
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>Compliance status</p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Mid-Compliance</p>
+                        <p className="font-bold" style={{ color: '#f59e0b', fontSize: 'var(--font-size-lg)' }}>
+                            ≥ {midComplianceHrs}h &amp; &lt; {complianceHrs}h
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>Mid-Compliance status</p>
+                    </div>
+                    <div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>Non-Compliance</p>
+                        <p className="font-bold" style={{ color: 'var(--color-status-red)', fontSize: 'var(--font-size-lg)' }}>
+                            &lt; {midComplianceHrs}h
+                        </p>
+                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>Non-Compliance status</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Compliance Rules */}
+            <div className="card mb-6">
+                <h3 className="card-title mb-6">Compliance Rules — Daily Discipline Model</h3>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                    gap: 'var(--spacing-4)'
+                }}>
                     <div style={{
                         padding: 'var(--spacing-4)',
                         background: 'var(--color-status-green-bg)',
                         borderRadius: 'var(--radius-lg)',
                         border: '1px solid var(--color-status-green-border)'
                     }}>
-                        <div className="flex items-center gap-2 mb-3">
+                        <div className="flex items-center gap-2 mb-2">
                             <span style={{
-                                width: '12px',
-                                height: '12px',
+                                width: '12px', height: '12px',
                                 background: 'var(--color-status-green)',
                                 borderRadius: 'var(--radius-full)'
                             }}></span>
-                            <span className="font-medium">Excellent (Top Performer)</span>
+                            <span className="font-medium">COMPLIANT</span>
                         </div>
-                        <p className="text-green font-bold" style={{ fontSize: 'var(--font-size-xl)' }}>
-                            &gt; {settings?.thresholds?.amber || 90}%
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            Daily hours ≥ {complianceHrs}h on every working day
                         </p>
-                        <p className="text-muted" style={{ fontSize: 'var(--font-size-xs)', marginTop: 'var(--spacing-2)' }}>
-                            Outstanding compliance
+                        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            Weekly/Monthly: All days must be Compliant
                         </p>
                     </div>
+
+                    <div style={{
+                        padding: 'var(--spacing-4)',
+                        background: '#fef9c3',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid #fde68a'
+                    }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span style={{
+                                width: '12px', height: '12px',
+                                background: '#f59e0b',
+                                borderRadius: 'var(--radius-full)'
+                            }}></span>
+                            <span className="font-medium">MID-COMPLIANT</span>
+                        </div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            Daily hours ≥ {midComplianceHrs}h and &lt; {complianceHrs}h
+                        </p>
+                        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            Weekly/Monthly: If any Mid-Compliance day exists (and no Non-Compliance)
+                        </p>
+                    </div>
+
+                    <div style={{
+                        padding: 'var(--spacing-4)',
+                        background: 'var(--color-status-red-bg)',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid var(--color-status-red-border)'
+                    }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span style={{
+                                width: '12px', height: '12px',
+                                background: 'var(--color-status-red)',
+                                borderRadius: 'var(--radius-full)'
+                            }}></span>
+                            <span className="font-medium">NON-COMPLIANT</span>
+                        </div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            Daily hours &lt; {midComplianceHrs}h or Absent
+                        </p>
+                        <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                            Weekly/Monthly: If any Non-Compliance day exists
+                        </p>
+                    </div>
+                </div>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr',
+                    gap: 'var(--spacing-3)',
+                    marginTop: 'var(--spacing-4)'
+                }}>
+                    <div style={{
+                        padding: 'var(--spacing-4)',
+                        background: '#dbeafe',
+                        borderRadius: 'var(--radius-lg)',
+                        border: '1px solid #93c5fd'
+                    }}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <span style={{
+                                width: '12px', height: '12px',
+                                background: '#2563eb',
+                                borderRadius: 'var(--radius-full)'
+                            }}></span>
+                            <span className="font-medium">EXEMPTED (WFH)</span>
+                        </div>
+                        <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>
+                            WFH employees — always marked as Compliant
+                        </p>
+                    </div>
+                </div>
+
+                {/* Attendance note */}
+                <div style={{
+                    marginTop: 'var(--spacing-4)',
+                    padding: 'var(--spacing-3)',
+                    background: 'var(--color-surface-elevated)',
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 'var(--font-size-sm)',
+                    color: 'var(--color-text-muted)'
+                }}>
+                    <strong>Daily Discipline Rule:</strong> Compliance is evaluated per day using configured expected hours.
+                    Weekly and monthly compliance are aggregations of daily compliance statuses — not aggregations of hours.
+                    Working extra on some days does <strong>NOT</strong> compensate for underworking on other days.
                 </div>
             </div>
 
@@ -336,7 +433,7 @@ export default function Settings() {
 
                 <button className="btn btn-secondary" onClick={fetchSettings}>
                     <RefreshCw size={18} />
-                    Reset to Defaults
+                    Reset
                 </button>
 
                 {saved && (

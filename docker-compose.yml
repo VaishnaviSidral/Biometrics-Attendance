@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  # ── Backend (FastAPI) ───────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: biometric_backend
+    env_file:
+      - .env
+    restart: always
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - biometric_network
+
+  # ── Frontend (React built → served by its own Nginx) ────
+  frontend:
+    build: ./frontend
+    container_name: biometric_frontend
+    restart: always
+    expose:
+      - "80"
+    networks:
+      - biometric_network
+
+  # ── Nginx Reverse Proxy ─────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx_proxy
+    restart: always
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - biometric_network
+
+networks:
+  biometric_network:
+    driver: bridge

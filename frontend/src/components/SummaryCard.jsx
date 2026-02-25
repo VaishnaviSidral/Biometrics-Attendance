@@ -5,6 +5,7 @@ export default function SummaryCard({
     trend,
     trendDirection,
     status,
+    description,
     onClick
 }) {
     const statusClass = status ? status.toLowerCase() : '';
@@ -21,6 +22,11 @@ export default function SummaryCard({
             </div>
             <div className="summary-card-value">{value}</div>
             <div className="summary-card-label">{label}</div>
+            {description && (
+                <div className="text-sm text-muted mt-1" style={{ fontSize: '0.75rem', opacity: 0.8 }}>
+                    {description}
+                </div>
+            )}
             {trend && (
                 <div className={`summary-card-trend ${trendDirection === 'up' ? 'trend-up' : 'trend-down'}`}>
                     {trendDirection === 'up' ? '↑' : '↓'} {trend}

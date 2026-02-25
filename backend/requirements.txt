@@ -7,3 +7,12 @@ openpyxl==3.1.2
 python-dateutil==2.8.2
 pydantic==2.5.2
 pydantic-settings==2.1.0
+python-jose[cryptography]==3.3.0
+pymysql==1.1.0
+
+# Google OAuth
+google-auth==2.25.2
+requests==2.31.0
+
+# Env
+python-dotenv==1.0.0

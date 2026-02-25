@@ -1,21 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Bell, Search, Sun, Moon } from 'lucide-react';
+import { Menu, Search, Sun, Moon, LogOut, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Header({ title, onMenuClick }) {
     const navigate = useNavigate();
     const location = useLocation();
+    const { user, logout, isAdmin } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [theme, setTheme] = useState(() => {
-        // Get saved theme from localStorage or default to 'dark'
         return localStorage.getItem('theme') || 'dark';
     });
 
-    // Hide header search on pages that have their own search
-    const hideSearch = location.pathname === '/employees';
+    // Hide header search on pages that have their own search or employee dashboard
+    const hideSearch = location.pathname === '/employees' || location.pathname === '/employee-dashboard';
 
     useEffect(() => {
-        // Apply theme to document
         document.documentElement.setAttribute('data-theme', theme);
         localStorage.setItem('theme', theme);
     }, [theme]);
@@ -26,10 +26,17 @@ export default function Header({ title, onMenuClick }) {
 
     const handleSearch = (e) => {
         if (e.key === 'Enter' && searchTerm.trim()) {
-            // Navigate to All Employees page with search query
             navigate(`/employees?search=${encodeURIComponent(searchTerm.trim())}`);
         }
     };
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login');
+    };
+
+    // Display name: use name if available, fallback to email
+    const displayName = user?.name || user?.email || 'User';
 
     return (
         <header className="header">
@@ -37,7 +44,7 @@ export default function Header({ title, onMenuClick }) {
                 <button
                     className="btn btn-ghost btn-icon"
                     onClick={onMenuClick}
-                    style={{ display: 'none' }} // Hidden on desktop
+                    style={{ display: 'none' }}
                 >
                     <Menu size={20} />
                 </button>
@@ -45,8 +52,8 @@ export default function Header({ title, onMenuClick }) {
             </div>
 
             <div className="header-actions">
-                {/* Search - hidden on All Employees page */}
-                {!hideSearch && (
+                {/* Search */}
+                {/* {!hideSearch && isAdmin && (
                     <div style={{ position: 'relative' }}>
                         <Search
                             size={18}
@@ -73,7 +80,7 @@ export default function Header({ title, onMenuClick }) {
                             }}
                         />
                     </div>
-                )}
+                )} */}
 
                 {/* Theme Toggle */}
                 <button
@@ -84,24 +91,24 @@ export default function Header({ title, onMenuClick }) {
                     {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
 
-                {/* Notifications */}
-                <button className="btn btn-ghost btn-icon" style={{ position: 'relative' }}>
-                    <Bell size={20} />
-                    <span style={{
-                        position: 'absolute',
-                        top: '6px',
-                        right: '6px',
-                        width: '8px',
-                        height: '8px',
-                        background: 'var(--color-status-red)',
-                        borderRadius: 'var(--radius-full)'
-                    }} />
-                </button>
+                {/* User info and logout */}
+                {user && (
+                    <>
+                        <div className="header-user-info">
+                            <User size={18} />
+                            <span>{displayName}</span>
+                            <span className="user-role-badge">{user.role}</span>
+                        </div>
 
-                {/* User Avatar */}
-                <div className="employee-avatar" style={{ cursor: 'pointer' }}>
-                    HR
-                </div>
+                        <button
+                            className="btn btn-ghost btn-icon"
+                            onClick={handleLogout}
+                            title="Logout"
+                        >
+                            <LogOut size={20} />
+                        </button>
+                    </>
+                )}
             </div>
         </header>
     );

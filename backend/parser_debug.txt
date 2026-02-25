@@ -1,0 +1,21 @@
+Started parsing PERIODICALL Oct-Dec 25.xlsx
+2026-02-04 11:37:58.472070: Excel header detection: found_header=True, row_idx=4
+2026-02-04 11:37:59.899958: Excel read columns: ['Unnamed: 0', 'DATE', 'Unnamed: 2', 'CODE', 'NAME', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'IN', 'OUT', 'Unnamed: 13', 'TOTAL', 'SHIFT', 'LATE', 'OT', 'REMARK']
+2026-02-04 11:37:59.900029: Raw columns: ['Unnamed: 0', 'DATE', 'Unnamed: 2', 'CODE', 'NAME', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'IN', 'OUT', 'Unnamed: 13', 'TOTAL', 'SHIFT', 'LATE', 'OT', 'REMARK']
+2026-02-04 11:37:59.901105: Normalized columns: ['Unnamed: 0', 'date', 'Unnamed: 2', 'code', 'name', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'in_time', 'out_time', 'Unnamed: 13', 'total', 'shift', 'late', 'ot', 'remark']
+2026-02-04 11:37:59.902198: Row 0 keys: ['Unnamed: 0', 'date', 'Unnamed: 2', 'code', 'name', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'in_time', 'out_time', 'Unnamed: 13', 'total', 'shift', 'late', 'ot', 'remark']
+2026-02-04 11:37:59.902240: Row 0 values: date=2025-10-01 00:00:00, in=2025-10-01 00:00:00, out=nan, total=nan
+2026-02-04 11:37:59.902792: Row 0 Parsed: in=None, out=None
+2026-02-04 11:37:59.903005: Row 1 keys: ['Unnamed: 0', 'date', 'Unnamed: 2', 'code', 'name', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'in_time', 'out_time', 'Unnamed: 13', 'total', 'shift', 'late', 'ot', 'remark']
+2026-02-04 11:37:59.903039: Row 1 values: date=2025-10-02 00:00:00, in=2025-10-02 00:00:00, out=nan, total=nan
+2026-02-04 11:37:59.903101: Row 1 Parsed: in=None, out=None
+2026-02-04 11:37:59.903244: Row 2 keys: ['Unnamed: 0', 'date', 'Unnamed: 2', 'code', 'name', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'in_time', 'out_time', 'Unnamed: 13', 'total', 'shift', 'late', 'ot', 'remark']
+2026-02-04 11:37:59.903270: Row 2 values: date=2025-10-03 00:00:00, in=2025-10-03 00:00:00, out=nan, total=nan
+2026-02-04 11:37:59.903328: Row 2 Parsed: in=None, out=None
+2026-02-04 11:37:59.903471: Row 3 keys: ['Unnamed: 0', 'date', 'Unnamed: 2', 'code', 'name', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'in_time', 'out_time', 'Unnamed: 13', 'total', 'shift', 'late', 'ot', 'remark']
+2026-02-04 11:37:59.903495: Row 3 values: date=2025-10-04 00:00:00, in=2025-10-04 00:00:00, out=nan, total=nan
+2026-02-04 11:37:59.903550: Row 3 Parsed: in=None, out=None
+2026-02-04 11:37:59.903665: Row 4 keys: ['Unnamed: 0', 'date', 'Unnamed: 2', 'code', 'name', 'Unnamed: 5', 'Unnamed: 6', 'Unnamed: 7', 'Unnamed: 8', 'Unnamed: 9', 'Unnamed: 10', 'in_time', 'out_time', 'Unnamed: 13', 'total', 'shift', 'late', 'ot', 'remark']
+2026-02-04 11:37:59.903685: Row 4 values: date=2025-10-05 00:00:00, in=2025-10-05 00:00:00, out=nan, total=nan
+2026-02-04 11:37:59.903740: Row 4 Parsed: in=None, out=None
+2026-02-04 11:38:01.353187: Parsed 10920 records

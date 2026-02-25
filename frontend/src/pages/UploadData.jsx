@@ -111,8 +111,8 @@ export default function UploadData() {
                         <tbody>
                             <tr>
                                 <td>01/12/2025</td>
-                                <td>118</td>
-                                <td>Nikhil Prakash Patil</td>
+                                <td>101</td>
+                                <td>John Doe</td>
                                 <td>09:44</td>
                                 <td>14:02</td>
                                 <td>04:18:00</td>
@@ -120,8 +120,8 @@ export default function UploadData() {
                             </tr>
                             <tr>
                                 <td>01/12/2025</td>
-                                <td>122</td>
-                                <td>Afaq Ayub Sheikh</td>
+                                <td>102</td>
+                                <td>Jane Smith</td>
                                 <td>10:19</td>
                                 <td>14:20</td>
                                 <td>04:01:00</td>
@@ -129,8 +129,8 @@ export default function UploadData() {
                             </tr>
                             <tr>
                                 <td>01/12/2025</td>
-                                <td>127</td>
-                                <td>Ashwini Patil</td>
+                                <td>103</td>
+                                <td>Robert Brown</td>
                                 <td>13:00</td>
                                 <td>09:06</td>
                                 <td>02:54:00</td>

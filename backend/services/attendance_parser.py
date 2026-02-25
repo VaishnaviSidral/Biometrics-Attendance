@@ -32,17 +32,14 @@ class AttendanceParser:
         self.errors: List[str] = []
         self.warnings: List[str] = []
     
+
+
     def parse_file(self, file_content: bytes, filename: str) -> Tuple[pd.DataFrame, List[Dict]]:
         """
         Parse uploaded file (CSV or Excel) into structured attendance data
-        
-        Args:
-            file_content: Raw file bytes
-            filename: Original filename for format detection
-        
-        Returns:
-            Tuple of (DataFrame, list of parsed records)
         """
+
+            
         self.errors = []
         self.warnings = []
         
@@ -54,11 +51,15 @@ class AttendanceParser:
         else:
             raise ValueError(f"Unsupported file format: {filename}")
         
+
+        
         # Normalize column names
         df = self._normalize_columns(df)
+
         
         # Parse and validate data
         records = self._parse_records(df)
+
         
         return df, records
     
@@ -103,6 +104,8 @@ class AttendanceParser:
                         found_header = True
                         break
                 
+
+                
                 # Second pass: read full file with correct header
                 try:
                     df = pd.read_excel(
@@ -114,6 +117,7 @@ class AttendanceParser:
                 except Exception:
                      # Fallback to default
                     df = pd.read_excel(BytesIO(content), header=header_row_idx)
+
 
                 return df
                 
@@ -151,27 +155,30 @@ class AttendanceParser:
         """Parse a single row into an attendance record"""
         # Parse date
         date_val = self._parse_date(row.get('date'))
+        
+
+            
         if not date_val:
-            with open("upload_debug.log", "a") as f:
-                f.write(f"Row {idx + 2}: Date parse failed for value '{row.get('date')}' (type: {type(row.get('date'))})\n")
-            self.warnings.append(f"Row {idx + 2}: Invalid or missing date")
+            # Skip rows without date (often headers or empty rows)
             return None
         
         # Parse employee code
         code = str(row.get('code', '')).strip()
         if not code or code == 'nan':
-            self.warnings.append(f"Row {idx + 2}: Missing employee code")
+            # Skip rows without code
             return None
-        
+            
         # Parse name
         name = str(row.get('name', '')).strip()
         if name == 'nan':
             name = ''
-        
+            
         # Parse times
         in_time = self._parse_time(row.get('in_time'))
         out_time = self._parse_time(row.get('out_time'))
         total_time = self._parse_time(row.get('total'))
+        
+
         
         # Parse other fields
         shift = self._parse_int(row.get('shift'))
@@ -231,31 +238,39 @@ class AttendanceParser:
         if pd.isna(value):
             return None
         
+        t = None
+        
         if isinstance(value, time):
-            return value
+            t = value
+        elif isinstance(value, datetime):
+            t = value.time()
+        else:
+            value_str = str(value).strip()
+            if not value_str or value_str == 'nan':
+                return None
+            
+            # Try common time formats including datetime strings
+            time_formats = [
+                '%H:%M',      # HH:MM
+                '%H:%M:%S',   # HH:MM:SS
+                '%I:%M %p',   # 12-hour with AM/PM
+                '%I:%M:%S %p',
+                '%Y-%m-%d %H:%M:%S', # Pandas default datetime string
+                '%d/%m/%Y %H:%M:%S',
+            ]
+            
+            for fmt in time_formats:
+                try:
+                    t = datetime.strptime(value_str, fmt).time()
+                    break
+                except ValueError:
+                    continue
         
-        if isinstance(value, datetime):
-            return value.time()
-        
-        value_str = str(value).strip()
-        if not value_str or value_str == 'nan':
+        # Treat 00:00:00 as None (missing)
+        if t and t.hour == 0 and t.minute == 0 and t.second == 0:
             return None
-        
-        # Try common time formats
-        time_formats = [
-            '%H:%M',      # HH:MM
-            '%H:%M:%S',   # HH:MM:SS
-            '%I:%M %p',   # 12-hour with AM/PM
-            '%I:%M:%S %p',
-        ]
-        
-        for fmt in time_formats:
-            try:
-                return datetime.strptime(value_str, fmt).time()
-            except ValueError:
-                continue
-        
-        return None
+            
+        return t
     
     def _parse_int(self, value) -> int:
         """Parse integer value"""

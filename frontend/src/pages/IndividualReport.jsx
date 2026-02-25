@@ -19,41 +19,40 @@ import {
 } from 'recharts';
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
-import StatusBadge from '../components/StatusBadge';
+import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
+import { useViewMonthDate } from '../contexts/DateContext';
 
 export default function IndividualReport() {
     const { code } = useParams();
     const navigate = useNavigate();
+    const { monthYear, monthValue, setMonthYear, setMonthValue } = useViewMonthDate('individualReport');
     const [loading, setLoading] = useState(true);
     const [report, setReport] = useState(null);
     const [activeTab, setActiveTab] = useState('daily');
-    const [weeks, setWeeks] = useState([]);
-    const [selectedWeek, setSelectedWeek] = useState('');
+
+    const now = new Date();
+    const selectedYear = monthYear;
+    const selectedMonth = monthValue;
+    const setSelectedYear = setMonthYear;
+    const setSelectedMonth = setMonthValue;
 
     useEffect(() => {
         fetchData();
-    }, [code, selectedWeek]);
+    }, [code, selectedYear, selectedMonth]);    
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Fetch weeks if not loaded
-            if (weeks.length === 0) {
-                const weeksData = await api.getAvailableWeeks();
-                setWeeks(weeksData.weeks || []);
-            }
-
-            const params = {};
-            if (selectedWeek) {
-                params.start_date = selectedWeek;
-                // Find end date for this week
-                const weekObj = weeks.find(w => w.week_start === selectedWeek);
-                if (weekObj) {
-                    params.end_date = weekObj.week_end;
-                }
-            }
-
+    
+            const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+            const endDate = new Date(selectedYear, selectedMonth, 0); // last day of month
+    
+            const params = {
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0]
+            };
+    
             const data = await api.getIndividualReport(code, params);
             setReport(data);
         } catch (err) {
@@ -62,22 +61,24 @@ export default function IndividualReport() {
             setLoading(false);
         }
     };
+    
 
     const handleExport = async () => {
         try {
-            const params = {};
-            if (selectedWeek) {
-                params.start_date = selectedWeek;
-                const weekObj = weeks.find(w => w.week_start === selectedWeek);
-                if (weekObj) {
-                    params.end_date = weekObj.week_end;
-                }
-            }
+            const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+            const endDate = new Date(selectedYear, selectedMonth, 0);
+    
+            const params = {
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0]
+            };
+    
             await api.exportIndividual(code, params);
         } catch (err) {
             console.error('Export error:', err);
         }
     };
+    
 
     const dailyColumns = [
         {
@@ -109,43 +110,44 @@ export default function IndividualReport() {
                 </span>
             )
         },
-        {
-            key: 'status',
-            label: 'Status',
-            render: (value) => {
-                const colors = {
-                    PRESENT: 'green',
-                    PARTIAL: 'amber',
-                    ABSENT: 'red'
-                };
-                const labels = {
-                    PRESENT: 'Present',
-                    PARTIAL: 'Partial',
-                    ABSENT: 'Absent'
-                };
-                return (
-                    <span className={`font-medium text-${colors[value] || 'red'}`}>
-                        {labels[value] || value}
-                    </span>
-                );
-            }
-        },
+        // {
+        //     key: 'status',
+        //     label: 'Status',
+        //     render: (value) => {
+        //         const colors = {
+        //             PRESENT: 'green',
+        //             PARTIAL: 'amber',
+        //             ABSENT: 'red'
+        //         };
+        //         const labels = {
+        //             PRESENT: 'Present',
+        //             PARTIAL: 'Partial',
+        //             ABSENT: 'Absent'
+        //         };
+        //         return (
+        //             <span className={`font-medium text-${colors[value] || 'red'}`}>
+        //                 {labels[value] || value}
+        //             </span>
+        //         );
+        //     }
+        // },
         {
             key: 'daily_compliance',
             label: 'Daily Compliance',
             render: (value, row) => {
-                const statusColors = {
-                    GREEN: 'green',
-                    AMBER: 'amber',
-                    RED: 'red'
-                };
-                const color = row.daily_status_color || 'RED';
+                // Use the status string directly from backend (Compliance / Mid-Compliance / Non-Compliance)
+                const status = row.daily_status_color || 'Non-Compliance';
+                const isWeekend = row.day === 'Saturday' || row.day === 'Sunday';
                 return (
                     <div className="flex items-center gap-2">
-                        <span className={`font-medium text-${statusColors[color]}`}>
-                            {value?.toFixed(1) || 0}%
-                        </span>
-                        <StatusBadge status={statusColors[color]} />
+                        {!isWeekend && (
+                        <>
+                            <span className="font-medium">
+                                {value?.toFixed(1) || 0}%
+                            </span>
+                            <StatusBadge status={status} />
+                        </>
+                    )}
                     </div>
                 );
             }
@@ -179,7 +181,7 @@ export default function IndividualReport() {
                 <div className="flex items-center gap-3">
                     <div className="progress-bar" style={{ width: '80px' }}>
                         <div
-                            className={`progress-fill ${row.status?.toLowerCase()}`}
+                            className={`progress-fill ${statusToCssClass(row.status)}`}
                             style={{ width: `${Math.min(value, 100)}%` }}
                         />
                     </div>
@@ -233,30 +235,60 @@ export default function IndividualReport() {
                 <div className="flex-1">
                     <h1 className="page-title">{report?.employee?.name}</h1>
                     <p className="page-subtitle">
-                        Employee ID: {report?.employee?.code}
-                        {report?.employee?.department && ` • ${report.employee.department}`}
+                        • Employee ID: {report?.employee?.code}
+                        {report?.employee?.work_mode && ` • Work Mode: ${report?.employee?.work_mode}`}
                     </p>
                 </div>
 
-                {/* Week Filter */}
+                {/* Year + Month Filter */}
+                <div className="flex items-center gap-4">
+
+                {/* Year */}
                 <select
                     className="form-input form-select"
-                    style={{ width: '200px' }}
-                    value={selectedWeek}
-                    onChange={(e) => setSelectedWeek(e.target.value)}
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
                 >
-                    <option value="">All History</option>
-                    {weeks.map((week) => (
-                        <option key={week.week_start} value={week.week_start}>
-                            {week.label}
+                    {Array.from({ length: 6 }, (_, i) => {
+                        const y = now.getFullYear() - i;
+                        return (
+                            <option key={y} value={y}>
+                                {y}
+                            </option>
+                        );
+                    })}
+                </select>
+
+                {/* Month */}
+                <select
+                    className="form-input form-select"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                >
+                    {[
+                        'January','February','March','April','May','June',
+                        'July','August','September','October','November','December'
+                    ].map((m, i) => (
+                        <option key={i+1} value={i+1}>
+                            {m}
                         </option>
                     ))}
                 </select>
 
+                {/* Export (optional) */}
+                {/* 
                 <button className="btn btn-primary" onClick={handleExport}>
                     <Download size={18} />
                     Export Report
-                </button>
+                </button> 
+                */}
+                </div>
+
+
+                {/* <button className="btn btn-primary" onClick={handleExport}>
+                    <Download size={18} />
+                    Export Report
+                </button> */}
             </div>
 
             {/* Summary Cards */}
@@ -276,7 +308,7 @@ export default function IndividualReport() {
                     icon={TrendingUp}
                     value={`${report?.summary?.avg_compliance?.toFixed(1) || 0}%`}
                     label="Average Compliance"
-                    status={report?.summary?.overall_status?.toLowerCase()}
+                    status={statusToCssClass(report?.summary?.overall_status)}
                 />
                 <SummaryCard
                     icon={Calendar}

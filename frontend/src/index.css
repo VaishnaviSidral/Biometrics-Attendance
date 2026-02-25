@@ -245,6 +245,61 @@ body {
   height: 20px;
 }
 
+/* Nav Group (collapsible parent + submenu) */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-item-toggle {
+  width: 100%;
+  border: none;
+  background: none;
+  font-family: inherit;
+  position: relative;
+}
+
+.nav-chevron {
+  margin-left: auto;
+  opacity: 0.5;
+  transition: transform var(--transition-base), opacity var(--transition-base);
+}
+
+.nav-item-toggle:hover .nav-chevron {
+  opacity: 1;
+}
+
+/* Submenu */
+.nav-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding-left: var(--spacing-6);
+  margin-top: var(--spacing-1);
+  animation: submenu-slide-in 0.2s ease;
+}
+
+.nav-submenu-item {
+  font-size: var(--font-size-xs) !important;
+  padding: var(--spacing-2) var(--spacing-3) !important;
+}
+
+.nav-submenu-item .nav-item-icon {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes submenu-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Header */
 .header {
   position: fixed;
@@ -564,6 +619,12 @@ td {
   border: 1px solid var(--color-status-red-border);
 }
 
+.status-badge.blue {
+  background: #dbeafe;
+  color: #2563eb;
+  border: 1px solid #93c5fd;
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
@@ -863,6 +924,10 @@ td {
 
 .progress-fill.red {
   background: var(--gradient-danger);
+}
+
+.progress-fill.blue {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
 }
 
 /* ============================================
@@ -1184,4 +1249,236 @@ td {
 
 .visible {
   display: block;
+}
+
+/* ============================================
+   Login Page Styles
+   ============================================ */
+
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+  padding: var(--spacing-6);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-8);
+  box-shadow: var(--shadow-xl);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: var(--spacing-8);
+}
+
+.login-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto var(--spacing-4);
+  background: var(--gradient-primary);
+  border-radius: var(--radius-2xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.login-title {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--spacing-2);
+}
+
+.login-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.login-error {
+  background: var(--color-status-red-bg);
+  border: 1px solid var(--color-status-red-border);
+  color: var(--color-status-red);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.login-help {
+  margin-top: var(--spacing-4);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+  font-size: var(--font-size-xs);
+}
+
+.login-help p {
+  margin-bottom: var(--spacing-1);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ============================================
+   Employee Dashboard Styles
+   ============================================ */
+
+.employee-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.employee-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-6);
+}
+
+.employee-filter-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-6);
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+.employee-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+}
+
+.monthly-total-badge {
+  background: var(--gradient-primary);
+  color: white;
+  padding: var(--spacing-3) var(--spacing-6);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.employee-table-container {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.employee-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.employee-table thead {
+  background: var(--color-surface-elevated);
+}
+
+.employee-table th {
+  padding: var(--spacing-4) var(--spacing-6);
+  text-align: left;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.employee-table tbody tr {
+  border-bottom: 1px solid var(--color-border-light);
+  transition: all var(--transition-base);
+}
+
+.employee-table tbody tr:hover {
+  background: var(--color-surface-hover);
+}
+
+.employee-table td {
+  padding: var(--spacing-4) var(--spacing-6);
+  font-size: var(--font-size-sm);
+}
+
+.date-cell {
+  display: flex;
+  flex-direction: column;
+}
+
+.date-primary {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.date-secondary {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.empty-message {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--spacing-10) !important;
+}
+
+/* ============================================
+   Header User Info
+   ============================================ */
+
+.header-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+}
+
+.user-role-badge {
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+}
+
+/* ============================================
+   No Sidebar Layout (for Employee view)
+   ============================================ */
+
+.main-content.no-sidebar {
+  margin-left: 0;
+  padding-top: calc(var(--header-height) + var(--spacing-6));
+}
+
+.header.no-sidebar {
+  left: 0;
+}
+
+/* Adjust header when there's no sidebar */
+.app-container:not(:has(.sidebar)) .header {
+  left: 0;
 }

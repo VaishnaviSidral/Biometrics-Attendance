@@ -1,0 +1,23 @@
+# Database
+*.db
+backend/attendance.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Logs
+*.log
+upload_debug.log
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+Thumbs.db
