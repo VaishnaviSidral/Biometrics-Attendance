@@ -156,12 +156,12 @@ export default function AllEmployees() {
             const empWorkMode = (emp.work_mode || 'WFO').toUpperCase();
             if (dashboardFilter === 'non_exempt') {
                 if (empWorkMode === 'WFH') return false;
-            } else             if (dashboardFilter === 'compliant') {
+            } else if (dashboardFilter === 'compliant') {
                 if (empWorkMode === 'WFH') return false;
-                if (emp.status !== 'Compliance') return false;
+                if ((emp.status || '').toLowerCase() !== 'compliance') return false;
             } else if (dashboardFilter === 'non_compliant') {
                 if (empWorkMode === 'WFH') return false;
-                if (emp.status === 'Compliance') return false;
+                if ((emp.status || '').toLowerCase() === 'compliance') return false;
             }
         }
 
