@@ -237,7 +237,8 @@ async def get_employee_weekly_compliance(
     expected_daily_minutes = mode_config['hours_per_day'] * 60
 
     daily_data = []
-    week_daily_statuses = []  # Collect for weekly aggregation
+    week_daily_statuses = []
+    week_present_days = 0
     current = sel_monday
     while current <= sel_sunday:
         record = daily_map.get(current)
@@ -245,7 +246,6 @@ async def get_employee_weekly_compliance(
             minutes = record.total_office_minutes or 0
             is_present = minutes > 0 or record.first_in is not None
 
-            # Get daily compliance status
             if record.compliance_status and current.weekday() < 5:
                 day_compliance_status = record.compliance_status.value
             elif current.weekday() < 5:
@@ -267,9 +267,13 @@ async def get_employee_weekly_compliance(
                 'compliance_status': day_compliance_status
             })
 
-            if current.weekday() < 5 and day_compliance_status:
-                week_daily_statuses.append(day_compliance_status)
+            if current.weekday() < 5:
+                if day_compliance_status:
+                    week_daily_statuses.append(day_compliance_status)
+                if is_present:
+                    week_present_days += 1
         else:
+            is_weekday = current.weekday() < 5
             daily_data.append({
                 'date': current.isoformat(),
                 'day': current.strftime('%A'),
@@ -278,27 +282,35 @@ async def get_employee_weekly_compliance(
                 'total_hours': '0h 00m',
                 'total_minutes': 0,
                 'is_present': False,
-                'is_weekday': current.weekday() < 5,
-                'compliance_status': 'Non-Compliance' if current.weekday() < 5 and not is_wfh else None
+                'is_weekday': is_weekday,
+                'compliance_status': 'Non-Compliance' if is_weekday and not is_wfh else (
+                    'Compliance' if is_weekday and is_wfh else None
+                )
             })
 
-            # Absent weekday → Non-Compliance
-            if current.weekday() < 5 and not is_wfh:
-                week_daily_statuses.append('Non-Compliance')
+            if is_weekday:
+                if is_wfh:
+                    week_daily_statuses.append('Compliance')
+                else:
+                    week_daily_statuses.append('Non-Compliance')
 
         current += timedelta(days=1)
 
-    # Selected week totals
-    week_total_minutes = sum(d['total_minutes'] for d in daily_data)
+    week_total_minutes = sum(
+            d['total_minutes']
+            for d in daily_data
+            if d['is_weekday']
+        )
     week_wfo_days = sum(1 for d in daily_data if d['is_present'] and d['is_weekday'])
 
-    # Weekly compliance from daily status aggregation
+    required_days = mode_config['required_days']
+    week_status = TimeCalculator.calculate_weekly_compliance(
+        week_daily_statuses, week_present_days, required_days, is_wfh
+    )
+
     if is_wfh:
         week_compliance = 100.0
-        week_status = 'Compliance'
     else:
-        week_status = TimeCalculator.aggregate_compliance_statuses(week_daily_statuses)
-        # Percentage for display only
         expected_weekly_minutes = mode_config.get('expected_weekly_hours', 0) * 60
         if expected_weekly_minutes > 0:
             week_compliance = min((week_total_minutes / expected_weekly_minutes) * 100, 100.0)
@@ -316,7 +328,6 @@ async def get_employee_weekly_compliance(
             s_compliance = 100.0
             s_status = 'Compliance'
         else:
-            # Get daily statuses for this week from DB
             s_daily_records = db.query(DailyAttendance).filter(
                 and_(
                     DailyAttendance.employee_code == employee_code,
@@ -325,21 +336,33 @@ async def get_employee_weekly_compliance(
                 )
             ).all()
 
+            s_daily_map = {r.date: r for r in s_daily_records}
             s_daily_statuses = []
-            for dr in s_daily_records:
-                if dr.date.weekday() < 5:
-                    if dr.compliance_status:
-                        s_daily_statuses.append(dr.compliance_status.value)
-                    else:
-                        cs = calculator.compute_daily_compliance_status(
-                            dr.total_office_minutes,
-                            dr.total_office_minutes > 0 or dr.first_in is not None,
-                            False
-                        )
-                        s_daily_statuses.append(cs)
+            s_present_days = 0
 
-            s_status = TimeCalculator.aggregate_compliance_statuses(s_daily_statuses)
-            # Percentage for display only
+            s_current = s.week_start
+            while s_current <= s.week_end:
+                if s_current.weekday() < 5:
+                    dr = s_daily_map.get(s_current)
+                    if dr:
+                        is_p = (dr.total_office_minutes or 0) > 0 or dr.first_in is not None
+                        if is_p:
+                            s_present_days += 1
+                        if dr.compliance_status:
+                            s_daily_statuses.append(dr.compliance_status.value)
+                        else:
+                            cs = calculator.compute_daily_compliance_status(
+                                dr.total_office_minutes,
+                                is_p, False
+                            )
+                            s_daily_statuses.append(cs)
+                    else:
+                        s_daily_statuses.append('Non-Compliance')
+                s_current += timedelta(days=1)
+
+            s_status = TimeCalculator.calculate_weekly_compliance(
+                s_daily_statuses, s_present_days, mode_config['required_days'], False
+            )
             expected_weekly_minutes = mode_config.get('expected_weekly_hours', 0) * 60
             if expected_weekly_minutes > 0:
                 s_compliance = min((s.total_office_minutes / expected_weekly_minutes) * 100, 100.0)

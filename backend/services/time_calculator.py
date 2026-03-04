@@ -129,31 +129,91 @@ class TimeCalculator:
             return "Non-Compliance"
 
     # ──────────────────────────────────────────────
-    # AGGREGATION — Weekly / Monthly
+    # AGGREGATION HELPERS
     # ──────────────────────────────────────────────
 
     @staticmethod
     def aggregate_compliance_statuses(daily_statuses: List[str]) -> str:
         """
-        Aggregate daily compliance statuses into a period status.
-
-        Rules:
-          - If ANY Non-Compliance day → "Non-Compliance"
-          - Else if ANY Mid-Compliance day → "Mid-Compliance"
-          - Else → "Compliance"
-
-        This is the ONLY way weekly/monthly compliance is determined.
-        No hours, no averages, no percentages, no compensation.
+        Pure aggregation of a list of compliance status strings.
+        Used internally by the weekly/monthly functions below.
         """
         if not daily_statuses:
             return "Non-Compliance"
 
-        non_compliance_count = daily_statuses.count("Non-Compliance")
-        mid_compliance_count = daily_statuses.count("Mid-Compliance")
-
-        if non_compliance_count > 0:
+        if "Non-Compliance" in daily_statuses:
             return "Non-Compliance"
-        elif mid_compliance_count > 0:
+        elif "Mid-Compliance" in daily_statuses:
+            return "Mid-Compliance"
+        else:
+            return "Compliance"
+
+    # ──────────────────────────────────────────────
+    # WEEKLY COMPLIANCE — Single shared function
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def calculate_weekly_compliance(
+        daily_statuses: List[str],
+        present_days: int,
+        required_days: int,
+        is_wfh: bool = False
+    ) -> str:
+        """
+        Weekly Compliance Logic
+
+        Rules:
+        1. WFH → Always Compliance
+        2. If present_days < required_days → Non-Compliance
+        3. If compliant_days >= required_days → Compliance
+        4. If some compliance but not enough → Mid-Compliance
+        5. Else → Non-Compliance
+        """
+
+        # Step 1: WFH always compliant
+        if is_wfh:
+            return "Compliance"
+
+        # Step 2: Not enough office days
+        if present_days < required_days:
+            return "Non-Compliance"
+
+        # Step 3: Count compliant & mid-compliant days
+        compliant_days = daily_statuses.count("Compliance")
+        mid_days = daily_statuses.count("Mid-Compliance")
+
+        # Step 4: Enough fully compliant days
+        if compliant_days >= required_days:
+            return "Compliance"
+
+        # Step 5: Partial compliance
+        if compliant_days + mid_days >= required_days:
+            return "Mid-Compliance"
+
+        # Step 6: Otherwise fail
+        return "Non-Compliance"
+    # ──────────────────────────────────────────────
+    # MONTHLY COMPLIANCE — Aggregated from weekly
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def calculate_monthly_compliance(weekly_statuses: List[str]) -> str:
+        """
+        THE single shared function for monthly compliance.
+        Monthly status depends ONLY on weekly statuses.
+        NOT on daily hours, monthly hours, or percentages.
+
+        Rules:
+          - If ANY week = "Non-Compliance" → "Non-Compliance"
+          - Else if ANY week = "Mid-Compliance" → "Mid-Compliance"
+          - Else → "Compliance"
+        """
+        if not weekly_statuses:
+            return "Non-Compliance"
+
+        if "Non-Compliance" in weekly_statuses:
+            return "Non-Compliance"
+        elif "Mid-Compliance" in weekly_statuses:
             return "Mid-Compliance"
         else:
             return "Compliance"
@@ -303,18 +363,9 @@ class TimeCalculator:
     ) -> Dict[str, Dict]:
         """
         Calculate weekly summary for each employee.
-
-        Weekly compliance is derived ONLY from daily compliance statuses.
-        It is NOT calculated from total hours, averages, or percentages.
-
-        For each weekday (Mon-Fri) in the week:
-          - If daily record exists → use its compliance_status
-          - If no record → absent → Non-Compliance
-
-        Aggregation:
-          - If ANY Non-Compliance → week = Non-Compliance
-          - Else if ANY Mid-Compliance → week = Mid-Compliance
-          - Else → week = Compliance
+        Enumerates ALL weekdays (Mon-Fri) in the week range.
+        Missing weekday records are treated as absent → Non-Compliance.
+        Uses calculate_weekly_compliance() for status determination.
         """
 
         weekly = {}
@@ -325,11 +376,8 @@ class TimeCalculator:
 
             total_minutes = 0
             actual_presence_days = 0
-
-            # Collect daily compliance statuses for weekdays in this week
             daily_statuses = []
 
-            # --- Work mode policy ---
             work_mode = employee_work_modes.get(emp_code, 'WFO').upper()
             mode_config = config.get(work_mode, config['WFO'])
             is_wfh = mode_config.get('always_compliant', False)
@@ -337,41 +385,42 @@ class TimeCalculator:
             policy_required_days = mode_config.get('required_days', 0)
             hours_per_day = mode_config.get('hours_per_day', self.expected_hours_per_day)
 
-            # --- Aggregate daily data ---
-            for day_date, summary in date_summaries.items():
-                if week_start <= day_date <= week_end:
-                    minutes = summary.get('total_office_minutes', 0)
-                    total_minutes += minutes
+            # Enumerate ALL weekdays in the range
+            current = week_start
+            while current <= week_end:
+                if current.weekday() < 5:  # Mon-Fri only
+                    summary = date_summaries.get(current)
+                    if summary:
+                        minutes = summary.get('total_office_minutes', 0)
+                        total_minutes += minutes
 
-                    is_present = minutes > 0
-                    if is_present:
-                        actual_presence_days += 1
+                        is_present = minutes > 0
+                        if is_present:
+                            actual_presence_days += 1
 
-                    # Only process weekdays for compliance
-                    if day_date.weekday() < 5:
-                        # Get compliance_status if already computed (from DB records)
                         if 'compliance_status' in summary and summary['compliance_status']:
                             daily_statuses.append(summary['compliance_status'])
                         else:
-                            # Compute daily compliance using rule engine
                             daily_status = self.compute_daily_compliance_status(
                                 minutes, is_present, is_wfh
                             )
                             daily_statuses.append(daily_status)
+                    else:
+                        # No record for this weekday → absent
+                        if is_wfh:
+                            daily_statuses.append("Compliance")
+                        else:
+                            daily_statuses.append("Non-Compliance")
+                current += timedelta(days=1)
 
-            # --- WFO days (policy capped) ---
             wfo_days = min(actual_presence_days, policy_required_days)
 
-            # --- Expected minutes (for display only) ---
             expected_minutes = policy_required_days * hours_per_day * 60
 
-            # --- Compliance Status from daily aggregation ---
-            if is_wfh:
-                compliance_status = "Compliance"
-            else:
-                compliance_status = self.aggregate_compliance_statuses(daily_statuses)
+            compliance_status = self.calculate_weekly_compliance(
+                daily_statuses, actual_presence_days, policy_required_days, is_wfh
+            )
 
-            # --- Compliance percentage (for UI display only, NOT for determining status) ---
             if is_wfh:
                 compliance_percentage = 100.0
                 expected_minutes = 0
@@ -380,7 +429,6 @@ class TimeCalculator:
             else:
                 compliance_percentage = 0.0
 
-            # --- Weekly record ---
             weekly[emp_code] = {
                 'week_start': week_start,
                 'week_end': week_end,
@@ -392,7 +440,7 @@ class TimeCalculator:
                 'compliance_percentage': round(compliance_percentage, 2),
                 'status': compliance_status,
                 'work_mode': work_mode,
-                'daily_statuses': daily_statuses  # for debugging/traceability
+                'daily_statuses': daily_statuses
             }
 
         return weekly

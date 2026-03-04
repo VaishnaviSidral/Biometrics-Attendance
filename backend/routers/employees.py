@@ -172,9 +172,8 @@ async def get_employees_with_project_bu(
     current_user: CurrentUser = Depends(require_admin)
 ):
     """
-    Return employee → project → BU Head mapping.
-
-    Data flow:
+    Return employee → latest project → BU Head mapping.
+     Data flow:
         biometric.employees.email
         → redmine.email_addresses.address
         → redmine.users.id
@@ -183,69 +182,70 @@ async def get_employees_with_project_bu(
         → redmine.custom_values (field 71) → BU Head name
     """
     try:
-        # 1) Get all active biometric employees that have an email
-        employees = db.query(Employee).filter(Employee.email.isnot(None), Employee.email != '', Employee.status == 1).all()
+        # 1) Active employees with email
+        employees = db.query(Employee).filter(
+            Employee.email.isnot(None),
+            Employee.email != '',
+            Employee.status == 1
+        ).all()
 
         if not employees:
             return []
 
         email_list = [emp.email for emp in employees]
 
-        # 2) Build a mapping from Redmine in one query
-        #    For each email → user → member → project → custom_value (BU Head)
         placeholders = ', '.join([f':e{i}' for i in range(len(email_list))])
         params = {f'e{i}': email for i, email in enumerate(email_list)}
 
+        # 2) Latest project per employee query
         rows = redmine_db.execute(
             text(f"""
                 SELECT
-                    ea.address   AS email,
-                    p.id         AS project_id,
-                    p.name       AS project_name,
-                    COALESCE(cv.value, 'N/A') AS bu_head
-                FROM email_addresses ea
-                JOIN users u        ON u.id = ea.user_id
-                JOIN members m      ON m.user_id = u.id
-                JOIN projects p     ON p.id = m.project_id
-                LEFT JOIN custom_values cv
-                    ON cv.customized_id   = p.id
-                   AND cv.customized_type = 'Project'
-                   AND cv.custom_field_id = 71
-                WHERE ea.address IN ({placeholders})
-                  AND p.status = 1
-                ORDER BY ea.address, p.name
+                    sub.email,
+                    sub.project_id,
+                    sub.project_name,
+                    sub.bu_head
+                FROM (
+                    SELECT 
+                        ea.address AS email,
+                        p.id AS project_id,
+                        p.name AS project_name,
+                        COALESCE(cv.value, 'N/A') AS bu_head,
+                        m.id AS member_id,
+                        ROW_NUMBER() OVER (PARTITION BY ea.address ORDER BY m.created_on DESC) AS rn
+                    FROM email_addresses ea
+                    JOIN users u ON u.id = ea.user_id
+                    JOIN members m ON m.user_id = u.id
+                    JOIN projects p ON p.id = m.project_id
+                    LEFT JOIN custom_values cv
+                        ON cv.customized_id = p.id
+                        AND cv.customized_type = 'Project'
+                        AND cv.custom_field_id = 71
+                    WHERE ea.address IN ({placeholders})
+                    AND p.status = 1
+                ) sub
+                WHERE sub.rn = 1
             """),
             params
         ).fetchall()
 
-        # 3) Build a lookup: email → list of { project_id, project_name, bu_head }
-        email_project_map = {}
-        for row in rows:
-            email = row[0]
-            if email not in email_project_map:
-                email_project_map[email] = []
-            email_project_map[email].append({
-                "project_id": row[1],
-                "project_name": row[2],
-                "bu_head": row[3]
-            })
+        # 3) Build lookup
+        email_project_map = {row[0]: {"project_id": row[1], "project_name": row[2], "bu_head": row[3]} for row in rows}
 
-        # 4) Combine biometric employees with Redmine project info
+        # 4) Combine employees with latest project info
         results = []
         for emp in employees:
-            projects = email_project_map.get(emp.email, [])
-            if projects:
-                for proj in projects:
-                    results.append({
-                        "employee_code": emp.code,
-                        "employee_name": emp.name,
-                        "email": emp.email,
-                        "project_id": proj["project_id"],
-                        "project_name": proj["project_name"],
-                        "bu_head": proj["bu_head"]
-                    })
+            proj = email_project_map.get(emp.email)
+            if proj:
+                results.append({
+                    "employee_code": emp.code,
+                    "employee_name": emp.name,
+                    "email": emp.email,
+                    "project_id": proj["project_id"],
+                    "project_name": proj["project_name"],
+                    "bu_head": proj["bu_head"]
+                })
             else:
-                # Employee exists in biometric DB but has no Redmine project mapping
                 results.append({
                     "employee_code": emp.code,
                     "employee_name": emp.name,
@@ -256,6 +256,7 @@ async def get_employees_with_project_bu(
                 })
 
         return results
+
     except Exception as ex:
         logger.error(f"Error fetching employee-project-BU mapping: {ex}")
         raise HTTPException(status_code=500, detail="Failed to fetch employee-project-BU mapping")
