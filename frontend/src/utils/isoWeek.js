@@ -155,7 +155,7 @@ export function getPreviousISOWeeks(weekString, count) {
 }
 
 /**
- * Build the year range array for dropdowns.
+ * Build year range array for dropdowns.
  * currentYear - 2  →  currentYear + 1
  */
 export function getYearRange() {
@@ -167,12 +167,58 @@ export function getYearRange() {
     return years;
 }
 
+/**
+ * Get weeks in a specific month
+ * @param {number} year
+ * @param {number} month (1-12)
+ * @returns {Array<{ value: string, label: string, weekStart: string, weekEnd: string }>}
+ */
+export function getWeeksInMonth(year, month) {
+    const weeks = [];
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+    
+    // Find the first Monday of the month or the Monday before the 1st
+    let currentMonday = new Date(firstDay);
+    const dayOfWeek = currentMonday.getDay(); // 0 = Sunday, 1 = Monday, ...
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    currentMonday.setDate(currentMonday.getDate() - daysToMonday);
+    
+    // Generate weeks until we pass the last day of the month
+    while (currentMonday <= lastDay) {
+        const sunday = new Date(currentMonday);
+        sunday.setDate(currentMonday.getDate() + 6);
+        
+        // Only include weeks that have at least one day in the target month
+        if (sunday >= firstDay && currentMonday <= lastDay) {
+            const weekNum = getISOWeekNumber(currentMonday);
+            const isoYear = getISOYear(currentMonday);
+            
+            weeks.push({
+                value: `${isoYear}-W${String(weekNum).padStart(2, '0')}`,
+                label: `Week ${String(weekNum).padStart(2, '0')} (${fmtShort(currentMonday)} – ${fmtShort(sunday)})`,
+                weekStart: currentMonday.toISOString().split('T')[0],
+                weekEnd: sunday.toISOString().split('T')[0],
+            });
+        }
+        
+        // Move to next Monday
+        currentMonday.setDate(currentMonday.getDate() + 7);
+    }
+    
+    return weeks;
+}
 
-
-
-
-
-
+/**
+ * Get month names array
+ * @returns {string[]}
+ */
+export function getMonthNames() {
+    return [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+}
 
 
 

@@ -31,6 +31,44 @@ function getDefaultMonth() {
     };
 }
 
+// ── Hook: Per-view Year-Month-Week Date ──────────────────────
+
+export function useViewYearMonthWeekDate(viewKey) {
+    const PREFIX = `date_${viewKey}`;
+
+    const [year, setYearState] = useState(() => {
+        const saved = sessionStorage.getItem(`${PREFIX}_year`);
+        return saved ? Number(saved) : getDefaultWeek().year;
+    });
+
+    const [month, setMonthState] = useState(() => {
+        const saved = sessionStorage.getItem(`${PREFIX}_month`);
+        return saved ? Number(saved) : new Date().getMonth() + 1;
+    });
+
+    const [weekValue, setWeekValueState] = useState(() => {
+        const saved = sessionStorage.getItem(`${PREFIX}_week_value`);
+        return saved || getDefaultWeek().weekValue;
+    });
+
+    const setYear = useCallback((newYear) => {
+        setYearState(newYear);
+        sessionStorage.setItem(`${PREFIX}_year`, String(newYear));
+    }, [PREFIX]);
+
+    const setMonth = useCallback((newMonth) => {
+        setMonthState(newMonth);
+        sessionStorage.setItem(`${PREFIX}_month`, String(newMonth));
+    }, [PREFIX]);
+
+    const setWeekValue = useCallback((newWeekValue) => {
+        setWeekValueState(newWeekValue);
+        sessionStorage.setItem(`${PREFIX}_week_value`, newWeekValue);
+    }, [PREFIX]);
+
+    return { year, month, weekValue, setYear, setMonth, setWeekValue };
+}
+
 // ── Hook: Per-view Week Date ──────────────────────────────
 
 export function useViewWeekDate(viewKey) {

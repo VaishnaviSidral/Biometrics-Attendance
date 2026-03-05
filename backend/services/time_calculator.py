@@ -74,8 +74,8 @@ class TimeCalculator:
 
     def __init__(self, expected_hours_per_day: int = 9, wfo_days_per_week: int = 5,
                  hybrid_days_per_week: int = 3, threshold_red: int = 60,
-                 threshold_amber: int = 90, compliance_hours: int = 9,
-                 mid_compliance_hours: int = 7, non_compliance_hours: int = 6):
+                 threshold_amber: int = 90, compliance_hours: float = 9.0,
+                 mid_compliance_hours: float = 7.0, non_compliance_hours: float = 6.0):
         self.expected_hours_per_day = expected_hours_per_day
         self.wfo_days_per_week = wfo_days_per_week
         self.hybrid_days_per_week = hybrid_days_per_week

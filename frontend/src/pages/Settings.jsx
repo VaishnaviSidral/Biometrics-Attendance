@@ -210,10 +210,11 @@ export default function Settings() {
                             value={complianceHrs}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                compliance_hours: parseInt(e.target.value)
+                                compliance_hours: parseFloat(e.target.value)
                             })}
-                            min="1"
+                            min="0.5"
                             max="24"
+                            step="0.5"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
@@ -234,10 +235,11 @@ export default function Settings() {
                             value={midComplianceHrs}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                mid_compliance_hours: parseInt(e.target.value)
+                                mid_compliance_hours: parseFloat(e.target.value)
                             })}
-                            min="1"
+                            min="0.5"
                             max="24"
+                            step="0.5"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
@@ -258,10 +260,11 @@ export default function Settings() {
                             value={nonComplianceHrs}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                non_compliance_hours: parseInt(e.target.value)
+                                non_compliance_hours: parseFloat(e.target.value)
                             })}
                             min="0"
                             max="24"
+                            step="0.5"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',

@@ -9,6 +9,8 @@ import {
     getPreviousISOWeeks,
     parseISOWeek,
     getYearRange,
+    getWeeksInMonth,
+    getMonthNames,
 } from '../utils/isoWeek';
 
 export default function EmployeeDashboard() {
@@ -17,15 +19,17 @@ export default function EmployeeDashboard() {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
 
-    // Calendar-based year + week
+    // Calendar-based year + month + week
     const currentISO = getCurrentISOWeek();
     const [selectedYear, setSelectedYear] = useState(currentISO.year);
+    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [selectedWeekValue, setSelectedWeekValue] = useState(
         `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
     );
 
     const years = useMemo(() => getYearRange(), []);
-    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+    const months = useMemo(() => getMonthNames(), []);
+    const isoWeeks = useMemo(() => getWeeksInMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
 
     // Last 5 weeks (calendar-calculated, cross-year safe)
     const last5Weeks = useMemo(() => getPreviousISOWeeks(selectedWeekValue, 5), [selectedWeekValue]);
@@ -84,11 +88,22 @@ export default function EmployeeDashboard() {
     const handleYearChange = (newYear) => {
         setSelectedYear(newYear);
         if (newYear === currentISO.year) {
+            setSelectedMonth(new Date().getMonth() + 1);
             setSelectedWeekValue(
                 `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
             );
         } else {
-            setSelectedWeekValue(`${newYear}-W01`);
+            setSelectedMonth(1);
+            const weeksInJan = getWeeksInMonth(newYear, 1);
+            setSelectedWeekValue(weeksInJan[0]?.value || `${newYear}-W01`);
+        }
+    };
+
+    const handleMonthChange = (newMonth) => {
+        setSelectedMonth(newMonth);
+        const weeksInMonth = getWeeksInMonth(selectedYear, newMonth);
+        if (weeksInMonth.length > 0) {
+            setSelectedWeekValue(weeksInMonth[0].value);
         }
     };
 
@@ -167,7 +182,7 @@ export default function EmployeeDashboard() {
                 </div>
             </div>
 
-            {/* Year + Week Filter */}
+            {/* Year + Month + Week Filter */}
             <div className="employee-filter-section">
                 <div className="employee-filters" style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--spacing-3)' }}>
                     <div className="form-group" style={{ marginBottom: 0 }}>
@@ -183,6 +198,19 @@ export default function EmployeeDashboard() {
                         >
                             {years.map((y) => (
                                 <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Month</label>
+                        <select
+                            className="form-input form-select"
+                            value={selectedMonth}
+                            onChange={(e) => handleMonthChange(Number(e.target.value))}
+                            style={{ minWidth: '140px' }}
+                        >
+                            {months.map((m, i) => (
+                                <option key={i + 1} value={i + 1}>{m}</option>
                             ))}
                         </select>
                     </div>

@@ -5,7 +5,7 @@ Handles settings API endpoints
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import Dict
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from database import get_db
 from models.settings import AppSettings
@@ -21,9 +21,9 @@ class SettingsUpdate(BaseModel):
     hybrid_days_per_week: int = 3
     threshold_red: int = 60      # Non-Compliance threshold (percentage)
     threshold_amber: int = 90    # Compliance threshold (percentage)
-    compliance_hours: int = 9           # >= X hours → Compliance
-    mid_compliance_hours: int = 7       # >= Y hours → Mid-Compliance
-    non_compliance_hours: int = 6       # >= Z hours → Non-Compliance
+    compliance_hours: float = Field(default=9.0)
+    mid_compliance_hours: float = Field(default=7.0)
+    non_compliance_hours: float = Field(default=6.0)     # >= Z hours → Non-Compliance
 
 
 def get_setting_value(db: Session, key: str, default: str) -> str:
@@ -65,15 +65,15 @@ async def get_settings(db: Session = Depends(get_db)) -> Dict:
         db, AppSettings.THRESHOLD_AMBER,
         str(default_settings.THRESHOLD_AMBER)
     ))
-    compliance_hours = int(get_setting_value(
+    compliance_hours = float(get_setting_value(
         db, AppSettings.COMPLIANCE_HOURS,
         str(default_settings.COMPLIANCE_HOURS)
     ))
-    mid_compliance_hours = int(get_setting_value(
+    mid_compliance_hours = float(get_setting_value(
         db, AppSettings.MID_COMPLIANCE_HOURS,
         str(default_settings.MID_COMPLIANCE_HOURS)
     ))
-    non_compliance_hours = int(get_setting_value(
+    non_compliance_hours = float(get_setting_value(
         db, AppSettings.NON_COMPLIANCE_HOURS,
         str(default_settings.NON_COMPLIANCE_HOURS)
     ))
@@ -154,15 +154,15 @@ def get_dynamic_settings(db: Session) -> Dict:
         db, AppSettings.THRESHOLD_AMBER,
         str(default_settings.THRESHOLD_AMBER)
     ))
-    compliance_hours = int(get_setting_value(
+    compliance_hours = float(get_setting_value(
         db, AppSettings.COMPLIANCE_HOURS,
         str(default_settings.COMPLIANCE_HOURS)
     ))
-    mid_compliance_hours = int(get_setting_value(
+    mid_compliance_hours = float(get_setting_value(
         db, AppSettings.MID_COMPLIANCE_HOURS,
         str(default_settings.MID_COMPLIANCE_HOURS)
     ))
-    non_compliance_hours = int(get_setting_value(
+    non_compliance_hours = float(get_setting_value(
         db, AppSettings.NON_COMPLIANCE_HOURS,
         str(default_settings.NON_COMPLIANCE_HOURS)
     ))
