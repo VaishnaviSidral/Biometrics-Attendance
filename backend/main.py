@@ -8,7 +8,7 @@ import logging
 
 from config import settings
 from database import init_db
-from routers import upload, employees, reports, settings as settings_router, auth, employee_attendance
+from routers import upload, employees, reports, settings as settings_router, auth, employee_attendance, holidays
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +39,7 @@ app.include_router(upload.router, prefix=settings.API_PREFIX)
 app.include_router(employees.router, prefix=settings.API_PREFIX)
 app.include_router(reports.router, prefix=settings.API_PREFIX)
 app.include_router(settings_router.router, prefix=settings.API_PREFIX)
+app.include_router(holidays.router, prefix=settings.API_PREFIX)
 
 
 @app.on_event("startup")

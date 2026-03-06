@@ -175,25 +175,23 @@ export function getYearRange() {
  */
 export function getWeeksInMonth(year, month) {
     const weeks = [];
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    
-    // Find the first Monday of the month or the Monday before the 1st
+
+    const firstDay = new Date(Date.UTC(year, month - 1, 1));
+    const lastDay = new Date(Date.UTC(year, month, 0));
+
+    // Find Monday of the week containing the 1st
     let currentMonday = new Date(firstDay);
-    const dayOfWeek = currentMonday.getDay(); // 0 = Sunday, 1 = Monday, ...
-    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    currentMonday.setDate(currentMonday.getDate() - daysToMonday);
-    
-    // Generate weeks until we pass the last day of the month
+    const dayOfWeek = currentMonday.getUTCDay() || 7; // Sun=7
+    currentMonday.setUTCDate(currentMonday.getUTCDate() - (dayOfWeek - 1));
+
     while (currentMonday <= lastDay) {
         const sunday = new Date(currentMonday);
-        sunday.setDate(currentMonday.getDate() + 6);
-        
-        // Only include weeks that have at least one day in the target month
+        sunday.setUTCDate(currentMonday.getUTCDate() + 6);
+
         if (sunday >= firstDay && currentMonday <= lastDay) {
             const weekNum = getISOWeekNumber(currentMonday);
             const isoYear = getISOYear(currentMonday);
-            
+
             weeks.push({
                 value: `${isoYear}-W${String(weekNum).padStart(2, '0')}`,
                 label: `Week ${String(weekNum).padStart(2, '0')} (${fmtShort(currentMonday)} – ${fmtShort(sunday)})`,
@@ -201,14 +199,12 @@ export function getWeeksInMonth(year, month) {
                 weekEnd: sunday.toISOString().split('T')[0],
             });
         }
-        
-        // Move to next Monday
-        currentMonday.setDate(currentMonday.getDate() + 7);
+
+        currentMonday.setUTCDate(currentMonday.getUTCDate() + 7);
     }
-    
+
     return weeks;
 }
-
 /**
  * Get month names array
  * @returns {string[]}

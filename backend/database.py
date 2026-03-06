@@ -106,7 +106,7 @@ def validate_user_in_redmine(email: str) -> dict | None:
 # ============================================================
 def init_db():
     """Initialize database tables (Biometric DB only - never write to Redmine)"""
-    from models import admin, employee, attendance, settings as settings_model
+    from models import admin, employee, attendance, settings as settings_model, holidays
     
     # Create all tables in biometric DB
     Base.metadata.create_all(bind=engine)

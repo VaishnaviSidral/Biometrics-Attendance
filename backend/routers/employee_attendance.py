@@ -250,7 +250,7 @@ async def get_employee_weekly_compliance(
                 day_compliance_status = record.compliance_status.value
             elif current.weekday() < 5:
                 day_compliance_status = calculator.compute_daily_compliance_status(
-                    minutes, is_present, is_wfh
+                    minutes, is_present, is_wfh, current.isoformat(), employee.email, db
                 )
             else:
                 day_compliance_status = None
@@ -353,7 +353,7 @@ async def get_employee_weekly_compliance(
                         else:
                             cs = calculator.compute_daily_compliance_status(
                                 dr.total_office_minutes,
-                                is_p, False
+                                is_p, False, dr.date.isoformat(), employee.email, db
                             )
                             s_daily_statuses.append(cs)
                     else:

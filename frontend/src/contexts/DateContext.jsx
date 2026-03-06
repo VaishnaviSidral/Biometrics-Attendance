@@ -1,8 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
     getCurrentISOWeek,
 } from '../utils/isoWeek';
-
 /**
  * Per-view session-based date management.
  * Each admin view (Dashboard, AllEmployees, IndividualReport, MonthlyReport)
@@ -37,7 +36,7 @@ export function useViewYearMonthWeekDate(viewKey) {
     const PREFIX = `date_${viewKey}`;
 
     const [year, setYearState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_year`);
+        const saved = localStorage.getItem(`${PREFIX}_year`);
         return saved ? Number(saved) : getDefaultWeek().year;
     });
 
@@ -53,17 +52,17 @@ export function useViewYearMonthWeekDate(viewKey) {
 
     const setYear = useCallback((newYear) => {
         setYearState(newYear);
-        sessionStorage.setItem(`${PREFIX}_year`, String(newYear));
+        localStorage.setItem(`${PREFIX}_year`, String(newYear));
     }, [PREFIX]);
 
     const setMonth = useCallback((newMonth) => {
         setMonthState(newMonth);
-        sessionStorage.setItem(`${PREFIX}_month`, String(newMonth));
+        localStorage.setItem(`${PREFIX}_month`, String(newMonth));
     }, [PREFIX]);
 
     const setWeekValue = useCallback((newWeekValue) => {
         setWeekValueState(newWeekValue);
-        sessionStorage.setItem(`${PREFIX}_week_value`, newWeekValue);
+        localStorage.setItem(`${PREFIX}_week_value`, newWeekValue);
     }, [PREFIX]);
 
     return { year, month, weekValue, setYear, setMonth, setWeekValue };
@@ -86,12 +85,12 @@ export function useViewWeekDate(viewKey) {
 
     const setWeekYear = useCallback((year) => {
         setWeekYearState(year);
-        sessionStorage.setItem(`${PREFIX}_week_year`, String(year));
+        localStorage.setItem(`${PREFIX}_week_year`, String(year));
     }, [PREFIX]);
 
     const setWeekValue = useCallback((value) => {
         setWeekValueState(value);
-        sessionStorage.setItem(`${PREFIX}_week_value`, value);
+        localStorage.setItem(`${PREFIX}_week_value`, value);
     }, [PREFIX]);
 
     return { weekYear, weekValue, setWeekYear, setWeekValue };
@@ -114,12 +113,12 @@ export function useViewMonthDate(viewKey) {
 
     const setMonthYear = useCallback((year) => {
         setMonthYearState(year);
-        sessionStorage.setItem(`${PREFIX}_month_year`, String(year));
+        localStorage.setItem(`${PREFIX}_month_year`, String(year));
     }, [PREFIX]);
 
     const setMonthValue = useCallback((month) => {
         setMonthValueState(month);
-        sessionStorage.setItem(`${PREFIX}_month_value`, String(month));
+        localStorage.setItem(`${PREFIX}_month_value`, String(month));
     }, [PREFIX]);
 
     // Combined month string for API calls (e.g., "2026-02")
@@ -136,4 +135,65 @@ export function useViewMonthDate(viewKey) {
     }, [setMonthYear, setMonthValue]);
 
     return { monthYear, monthValue, monthString, setMonthYear, setMonthValue, setMonthString };
+}
+
+function getDefaultDate() {
+    const iso = getCurrentISOWeek();
+    const now = new Date();
+
+    return {
+        year: iso.year,
+        month: now.getMonth() + 1,
+        week: `${iso.year}-W${String(iso.week).padStart(2, '0')}`
+    };
+}
+
+export function useGlobalDate() {
+
+    const defaults = getDefaultDate();
+
+    const [year, setYearState] = useState(() => {
+        return Number(sessionStorage.getItem('attendance_year')) || defaults.year;
+    });
+
+    const [month, setMonthState] = useState(() => {
+        return Number(sessionStorage.getItem('attendance_month')) || defaults.month;
+    });
+
+    const [week, setWeekState] = useState(() => {
+        const saved = sessionStorage.getItem('attendance_week');
+        return saved || defaults.week;
+    });
+
+    // ✅ Ensure default week is stored when first loading
+    useEffect(() => {
+        if (!sessionStorage.getItem('attendance_week')) {
+            sessionStorage.setItem('attendance_week', defaults.week);
+            setWeekState(defaults.week);
+        }
+    }, [defaults.week]);
+
+    const setYear = useCallback((value) => {
+        setYearState(value);
+        sessionStorage.setItem('attendance_year', value);
+    }, []);
+
+    const setMonth = useCallback((value) => {
+        setMonthState(value);
+        sessionStorage.setItem('attendance_month', value);
+    }, []);
+
+    const setWeek = useCallback((value) => {
+        setWeekState(value);
+        sessionStorage.setItem('attendance_week', value);
+    }, []);
+
+    return {
+        year,
+        month,
+        week,
+        setYear,
+        setMonth,
+        setWeek
+    };
 }

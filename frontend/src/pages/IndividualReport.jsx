@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -21,12 +21,12 @@ import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
-import { useViewMonthDate } from '../contexts/DateContext';
+import { useGlobalDate } from '../contexts/DateContext';
 
 export default function IndividualReport() {
     const { code } = useParams();
     const navigate = useNavigate();
-    const { monthYear, monthValue, setMonthYear, setMonthValue } = useViewMonthDate('individualReport');
+    const {monthYear, monthValue, setMonthYear, setMonthValue } = useGlobalDate();
     const [loading, setLoading] = useState(true);
     const [report, setReport] = useState(null);
     const [activeTab, setActiveTab] = useState('daily');

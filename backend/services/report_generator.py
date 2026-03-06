@@ -69,10 +69,11 @@ class ReportGenerator:
         return self._calculator
 
     def _get_daily_compliance_status(self, total_minutes: int, is_present: bool,
-                                      is_wfh: bool = False) -> str:
+                                      is_wfh: bool = False, date: str = None, 
+                                      employee_email: str = None, db: Session = None) -> str:
         """Delegate to rule engine for daily compliance."""
         return self.calculator.compute_daily_compliance_status(
-            total_minutes, is_present, is_wfh
+            total_minutes, is_present, is_wfh, date, employee_email, db
         )
 
     def _get_compliance_pct_for_display(self, total_minutes: int, expected_minutes: int) -> float:
@@ -117,6 +118,10 @@ class ReportGenerator:
 
         daily_map = {r.date: r for r in daily_records}
 
+        # Get employee email for leave checking
+        employee = self.db.query(Employee).filter(Employee.code == employee_code).first()
+        employee_email = employee.email if employee else None
+        
         daily_statuses = []
         present_days = 0
         total_minutes = 0
@@ -134,14 +139,20 @@ class ReportGenerator:
                     if record.compliance_status:
                         daily_statuses.append(record.compliance_status.value)
                     else:
-                        cs = self._get_daily_compliance_status(mins, is_present, False)
+                        cs = self._get_daily_compliance_status(
+                            mins, is_present, False, current.isoformat(), employee_email, self.db
+                        )
                         daily_statuses.append(cs)
                 else:
-                    daily_statuses.append("Non-Compliance")
+                    # No record - check if it's a holiday or leave
+                    cs = self._get_daily_compliance_status(
+                        0, False, False, current.isoformat(), employee_email, self.db
+                    )
+                    daily_statuses.append(cs)
             current += timedelta(days=1)
 
         status = TimeCalculator.calculate_weekly_compliance(
-            daily_statuses, present_days, required_days, is_wfh
+            daily_statuses, present_days = 0, required_days = 0, is_wfh = is_wfh
         )
 
         expected_minutes = mode_config.get('expected_weekly_hours', 0) * 60
@@ -178,7 +189,7 @@ class ReportGenerator:
             ).all()
 
             total_compliance = 0
-            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0}
+            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0}
             total_wfo_days = 0
             valid_count = 0
 
@@ -394,7 +405,8 @@ class ReportGenerator:
                 # Fallback for records without compliance_status
                 is_present = record.total_office_minutes > 0 or record.first_in is not None
                 daily_status_color = self._get_daily_compliance_status(
-                    record.total_office_minutes, is_present, is_wfh
+                    record.total_office_minutes, is_present, is_wfh, 
+                    record.date.isoformat(), employee.email, self.db
                 )
 
             # Collect weekday statuses for overall aggregation
@@ -884,7 +896,9 @@ class ReportGenerator:
                 else:
                     work_mode = (emp.work_mode or 'WFO').upper()
                     is_wfh = work_mode == 'WFH'
-                    compliance_label = self._get_daily_compliance_status(minutes, True, is_wfh)
+                    compliance_label = self._get_daily_compliance_status(
+                        minutes, True, is_wfh, date.isoformat(), emp.email, self.db
+                    )
 
                 results.append({
                     'employee_code': emp.code,

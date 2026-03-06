@@ -157,8 +157,13 @@ async def upload_attendance_file(
 
                 # Only compute compliance for weekdays
                 if rec_date.weekday() < 5:
+                    # Get employee email for leave checking
+                    employee = db.query(Employee).filter(Employee.code == emp_code).first()
+                    employee_email = employee.email if employee else None
+                    
                     daily_compliance = calculator.compute_daily_compliance_status(
-                        summary['total_office_minutes'], is_present, is_wfh
+                        summary['total_office_minutes'], is_present, is_wfh, 
+                        rec_date.isoformat(), employee_email, db
                     )
                     compliance_enum = ComplianceStatus(daily_compliance)
                 else:
