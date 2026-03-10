@@ -10,7 +10,7 @@ Compliance Philosophy:
   NOT aggregations of hours.
 """
 from datetime import date, datetime, timedelta
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Set
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 import json
@@ -18,7 +18,9 @@ import logging
 
 from models.employee import Employee
 from models.attendance import DailyAttendance, WeeklySummary, ComplianceStatus
+from models.holidays import Holiday
 from services.time_calculator import build_work_mode_config, TimeCalculator
+from services.redmine_service import redmine_service
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +30,11 @@ class ReportGenerator:
 
     def __init__(self, db: Session):
         self.db = db
-        # Load dynamic settings and build config once per request
         self._dynamic_settings = None
         self._work_mode_config = None
         self._calculator = None
+        self._holidays_cache: Dict[str, bool] = {}
+        self._leave_cache: Dict[str, Set[str]] = {}
 
     @property
     def dynamic_settings(self) -> Dict:
@@ -68,6 +71,98 @@ class ReportGenerator:
             )
         return self._calculator
 
+    def _preload_holidays(self, start_date: date, end_date: date):
+        """Batch-load holidays for a date range into cache."""
+        cache_key = f"{start_date}_{end_date}"
+        if cache_key in self._holidays_cache:
+            return
+        holidays = self.db.query(Holiday.date).filter(
+            Holiday.date >= start_date,
+            Holiday.date <= end_date
+        ).all()
+        for h in holidays:
+            self._holidays_cache[h.date.isoformat() if isinstance(h.date, date) else str(h.date)] = True
+        self._holidays_cache[cache_key] = True
+
+    def _is_holiday_cached(self, date_str: str) -> bool:
+        return self._holidays_cache.get(date_str, False)
+
+    def _preload_leaves(self, email: str, start_date: date, end_date: date):
+        """Load leave days from Redmine for a single employee into cache."""
+        if not email:
+            return
+        cache_key = f"{email}_{start_date}_{end_date}"
+        if cache_key in self._leave_cache:
+            return
+        try:
+            leave_days = redmine_service.get_leave_days_for_period(
+                email, start_date.isoformat(), end_date.isoformat()
+            )
+            existing = self._leave_cache.get(email, set())
+            for d in leave_days:
+                d_str = d.isoformat() if isinstance(d, date) else str(d)
+                existing.add(d_str)
+            self._leave_cache[email] = existing
+            self._leave_cache[cache_key] = existing
+        except Exception:
+            pass
+
+    def _batch_preload_leaves(self, emails: list, start_date: date, end_date: date):
+        """Batch-load leave days for many employees in a single DB round-trip."""
+        uncached = [
+            e for e in emails
+            if e and f"{e}_{start_date}_{end_date}" not in self._leave_cache
+        ]
+        if not uncached:
+            return
+
+        try:
+            results = redmine_service.get_leave_days_for_employees(
+                uncached, start_date.isoformat(), end_date.isoformat()
+            )
+            for email, leave_days in results.items():
+                existing = self._leave_cache.get(email, set())
+                for d in leave_days:
+                    d_str = d.isoformat() if isinstance(d, date) else str(d)
+                    existing.add(d_str)
+                self._leave_cache[email] = existing
+                self._leave_cache[f"{email}_{start_date}_{end_date}"] = existing
+
+            for email in uncached:
+                if email not in results:
+                    self._leave_cache.setdefault(email, set())
+                    self._leave_cache[f"{email}_{start_date}_{end_date}"] = self._leave_cache[email]
+        except Exception:
+            pass
+
+    def _is_on_leave_cached(self, email: str, date_str: str) -> bool:
+        if not email:
+            return False
+        return date_str in self._leave_cache.get(email, set())
+
+    def _get_daily_compliance_fast(self, total_minutes: int, is_present: bool,
+                                    is_wfh: bool, date_str: str,
+                                    employee_email: str) -> str:
+        """Fast daily compliance using pre-loaded holiday/leave caches."""
+        if is_present and total_minutes > 0:
+            if is_wfh:
+                return "Compliance"
+            daily_hours = total_minutes / 60.0
+            if daily_hours >= self.calculator.compliance_hours:
+                return "Compliance"
+            elif daily_hours >= self.calculator.mid_compliance_hours:
+                return "Mid-Compliance"
+            else:
+                return "Non-Compliance"
+
+        if self._is_holiday_cached(date_str):
+            return "Leave"
+
+        if self._is_on_leave_cached(employee_email, date_str):
+            return "Leave"
+
+        return "Non-Compliance"
+
     def _get_daily_compliance_status(self, total_minutes: int, is_present: bool,
                                       is_wfh: bool = False, date: str = None, 
                                       employee_email: str = None, db: Session = None) -> str:
@@ -81,6 +176,28 @@ class ReportGenerator:
         if expected_minutes > 0:
             return min((total_minutes / expected_minutes) * 100, 100.0)
         return 100.0
+
+    # ──────────────────────────────────────────────
+    # BATCH DAILY ATTENDANCE LOADING
+    # ──────────────────────────────────────────────
+
+    def _batch_load_daily_attendance(self, start_date: date, end_date: date,
+                                      employee_codes: List[str] = None) -> Dict[str, Dict[date, 'DailyAttendance']]:
+        """Load all daily attendance records for a date range, grouped by employee code."""
+        query = self.db.query(DailyAttendance).filter(
+            and_(
+                DailyAttendance.date >= start_date,
+                DailyAttendance.date <= end_date,
+            )
+        )
+        if employee_codes:
+            query = query.filter(DailyAttendance.employee_code.in_(employee_codes))
+
+        records = query.all()
+        result: Dict[str, Dict[date, DailyAttendance]] = {}
+        for r in records:
+            result.setdefault(r.employee_code, {})[r.date] = r
+        return result
 
     # ──────────────────────────────────────────────
     # SHARED WEEKLY COMPLIANCE HELPER (DB-aware)
@@ -98,7 +215,6 @@ class ReportGenerator:
         """
         mode_config = self.work_mode_config.get(work_mode, self.work_mode_config['WFO'])
         is_wfh = mode_config.get('always_compliant', False)
-        required_days = mode_config.get('required_days', 0)
 
         if is_wfh:
             return {
@@ -118,7 +234,6 @@ class ReportGenerator:
 
         daily_map = {r.date: r for r in daily_records}
 
-        # Get employee email for leave checking
         employee = self.db.query(Employee).filter(Employee.code == employee_code).first()
         employee_email = employee.email if employee else None
         
@@ -144,7 +259,6 @@ class ReportGenerator:
                         )
                         daily_statuses.append(cs)
                 else:
-                    # No record - check if it's a holiday or leave
                     cs = self._get_daily_compliance_status(
                         0, False, False, current.isoformat(), employee_email, self.db
                     )
@@ -166,15 +280,78 @@ class ReportGenerator:
             'total_minutes': total_minutes,
         }
 
+    def _compute_weekly_compliance_fast(
+        self, employee_code: str, week_start: date, week_end: date,
+        work_mode: str, daily_map: Dict[date, 'DailyAttendance'],
+        employee_email: str = None
+    ) -> Dict:
+        """
+        Optimized weekly compliance using pre-loaded data.
+        Avoids per-employee DB queries by accepting pre-loaded daily records and caches.
+        """
+        mode_config = self.work_mode_config.get(work_mode, self.work_mode_config['WFO'])
+        is_wfh = mode_config.get('always_compliant', False)
+
+        if is_wfh:
+            return {
+                'status': 'Compliance',
+                'compliance_percentage': 100.0,
+                'present_days': 0,
+                'daily_statuses': [],
+            }
+
+        daily_statuses = []
+        present_days = 0
+        total_minutes = 0
+
+        current = week_start
+        while current <= week_end:
+            if current.weekday() < 5:
+                record = daily_map.get(current)
+                if record:
+                    mins = record.total_office_minutes or 0
+                    total_minutes += mins
+                    is_present = mins > 0 or record.first_in is not None
+                    if is_present:
+                        present_days += 1
+                    if record.compliance_status:
+                        daily_statuses.append(record.compliance_status.value)
+                    else:
+                        cs = self._get_daily_compliance_fast(
+                            mins, is_present, False, current.isoformat(), employee_email
+                        )
+                        daily_statuses.append(cs)
+                else:
+                    cs = self._get_daily_compliance_fast(
+                        0, False, False, current.isoformat(), employee_email
+                    )
+                    daily_statuses.append(cs)
+            current += timedelta(days=1)
+
+        status = TimeCalculator.calculate_weekly_compliance(
+            daily_statuses, present_days=0, required_days=0, is_wfh=is_wfh
+        )
+
+        expected_minutes = mode_config.get('expected_weekly_hours', 0) * 60
+        pct = self._get_compliance_pct_for_display(total_minutes, expected_minutes)
+
+        return {
+            'status': status,
+            'compliance_percentage': round(pct, 2),
+            'present_days': present_days,
+            'daily_statuses': daily_statuses,
+            'total_minutes': total_minutes,
+        }
+
     def get_dashboard_summary(self) -> Dict:
         """Get summary statistics for dashboard"""
-        total_employees = self.db.query(Employee).filter(Employee.status == 1).count()
+        all_employees = self.db.query(Employee).filter(Employee.status == 1).all()
+        total_employees = len(all_employees)
+        emp_by_code = {e.code: e for e in all_employees}
 
-        # Count by work_mode
         work_mode_counts = {}
         for mode in ['WFO', 'HYBRID', 'WFH']:
-            count = self.db.query(Employee).filter(Employee.work_mode == mode, Employee.status == 1).count()
-            work_mode_counts[mode] = count
+            work_mode_counts[mode] = sum(1 for e in all_employees if (e.work_mode or 'WFO').upper() == mode)
 
         latest_summary = self.db.query(WeeklySummary).order_by(
             WeeklySummary.week_start.desc()
@@ -188,19 +365,31 @@ class ReportGenerator:
                 WeeklySummary.week_start == week_start
             ).all()
 
+            emp_codes = [s.employee_code for s in weekly_summaries if emp_by_code.get(s.employee_code)]
+            all_daily = self._batch_load_daily_attendance(week_start, week_end, emp_codes)
+            self._preload_holidays(week_start, week_end)
+            leave_emails = [
+                emp_by_code[c].email for c in emp_codes
+                if emp_by_code.get(c) and emp_by_code[c].email
+                and (emp_by_code[c].work_mode or 'WFO').upper() != 'WFH'
+            ]
+            self._batch_preload_leaves(leave_emails, week_start, week_end)
+
             total_compliance = 0
             status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0}
             total_wfo_days = 0
             valid_count = 0
 
             for s in weekly_summaries:
-                emp = self.db.query(Employee).filter(Employee.code == s.employee_code, Employee.status == 1).first()
+                emp = emp_by_code.get(s.employee_code)
                 if not emp:
                     continue
                 work_mode = (emp.work_mode or 'WFO').upper()
+                daily_map = all_daily.get(s.employee_code, {})
 
-                result = self._compute_employee_weekly_compliance(
-                    s.employee_code, week_start, week_end, work_mode
+                result = self._compute_weekly_compliance_fast(
+                    s.employee_code, week_start, week_end, work_mode,
+                    daily_map, emp.email
                 )
 
                 total_compliance += result['compliance_percentage']
@@ -266,10 +455,8 @@ class ReportGenerator:
                     Employee.code == WeeklySummary.employee_code
                 )
 
-        # Only active employees
         query = query.filter(Employee.status == 1)
 
-        # Filter by work_mode
         if work_mode_filter:
             query = query.filter(Employee.work_mode == work_mode_filter.upper())
 
@@ -278,8 +465,18 @@ class ReportGenerator:
 
         results = query.all()
 
-        # Get the week_end for daily status lookup
         week_end = (actual_week_start + timedelta(days=6)) if actual_week_start else None
+
+        all_daily = {}
+        if actual_week_start and week_end:
+            emp_codes = [emp.code for emp, _ in results]
+            all_daily = self._batch_load_daily_attendance(actual_week_start, week_end, emp_codes)
+            self._preload_holidays(actual_week_start, week_end)
+            leave_emails = [
+                emp.email for emp, _ in results
+                if emp.email and (emp.work_mode or 'WFO').upper() != 'WFH'
+            ]
+            self._batch_preload_leaves(leave_emails, actual_week_start, week_end)
 
         reports = []
         for emp, summary in results:
@@ -290,8 +487,10 @@ class ReportGenerator:
             wfo_days = summary.wfo_days if summary else 0
 
             if actual_week_start and week_end:
-                result = self._compute_employee_weekly_compliance(
-                    emp.code, actual_week_start, week_end, work_mode
+                daily_map = all_daily.get(emp.code, {})
+                result = self._compute_weekly_compliance_fast(
+                    emp.code, actual_week_start, week_end, work_mode,
+                    daily_map, emp.email
                 )
                 status_val = result['status']
                 compliance = result['compliance_percentage']
@@ -321,7 +520,6 @@ class ReportGenerator:
             }
             reports.append(report)
 
-        # Sort results
         reverse = sort_order.lower() == 'desc'
         if sort_by == 'name':
             reports.sort(key=lambda x: x['employee_name'], reverse=reverse)
@@ -426,11 +624,23 @@ class ReportGenerator:
                 'daily_status_color': daily_status_color
             })
 
+        if weekly_summaries:
+            ws_start = min(s.week_start for s in weekly_summaries)
+            ws_end = max(s.week_end for s in weekly_summaries)
+            weekly_daily = self._batch_load_daily_attendance(ws_start, ws_end, [employee_code])
+            self._preload_holidays(ws_start, ws_end)
+            if employee.email:
+                self._preload_leaves(employee.email, ws_start, ws_end)
+            emp_weekly_daily_map = weekly_daily.get(employee_code, {})
+        else:
+            emp_weekly_daily_map = {}
+
         weekly_data = []
         weekly_statuses_for_overall = []
         for summary in weekly_summaries:
-            result = self._compute_employee_weekly_compliance(
-                employee_code, summary.week_start, summary.week_end, work_mode
+            result = self._compute_weekly_compliance_fast(
+                employee_code, summary.week_start, summary.week_end, work_mode,
+                emp_weekly_daily_map, employee.email
             )
             weekly_statuses_for_overall.append(result['status'])
 
@@ -521,15 +731,26 @@ class ReportGenerator:
             Employee.status == 1
         ).all()
 
+        emp_codes = [employee.code for _, employee in summaries]
+        all_daily = self._batch_load_daily_attendance(week_start, week_end, emp_codes)
+        self._preload_holidays(week_start, week_end)
+        leave_emails = [
+            employee.email for _, employee in summaries
+            if employee.email and (employee.work_mode or 'WFO').upper() != 'WFH'
+        ]
+        self._batch_preload_leaves(leave_emails, week_start, week_end)
+
         employees = []
         compliant_count = 0
 
         for summary, employee in summaries:
             work_mode = (employee.work_mode or 'WFO').upper()
             mode_config = self.work_mode_config.get(work_mode, self.work_mode_config['WFO'])
+            daily_map = all_daily.get(employee.code, {})
 
-            result = self._compute_employee_weekly_compliance(
-                employee.code, week_start, week_end, work_mode
+            result = self._compute_weekly_compliance_fast(
+                employee.code, week_start, week_end, work_mode,
+                daily_map, employee.email
             )
 
             status_val = result['status']
@@ -598,13 +819,21 @@ class ReportGenerator:
 
         week_end = week_start + timedelta(days=6)
 
-        # Get weekly summaries for the selected week
         summaries = {
             s.employee_code: s
             for s in self.db.query(WeeklySummary).filter(
                 WeeklySummary.week_start == week_start
             ).all()
         }
+
+        emp_codes = [e.code for e in non_exempt_employees if summaries.get(e.code)]
+        all_daily = self._batch_load_daily_attendance(week_start, week_end, emp_codes)
+        self._preload_holidays(week_start, week_end)
+        leave_emails = [
+            emp.email for emp in non_exempt_employees
+            if summaries.get(emp.code) and emp.email
+        ]
+        self._batch_preload_leaves(leave_emails, week_start, week_end)
 
         compliant = 0
         mid_compliant = 0
@@ -615,8 +844,10 @@ class ReportGenerator:
 
             if summary:
                 work_mode = (emp.work_mode or 'WFO').upper()
-                result = self._compute_employee_weekly_compliance(
-                    emp.code, week_start, week_end, work_mode
+                daily_map = all_daily.get(emp.code, {})
+                result = self._compute_weekly_compliance_fast(
+                    emp.code, week_start, week_end, work_mode,
+                    daily_map, emp.email
                 )
                 status = result['status']
                 if status == 'Compliance':
@@ -756,7 +987,6 @@ class ReportGenerator:
         ds = self.dynamic_settings
         compliance_hours = ds['compliance_hours']
 
-        # Find all weeks (Mon-Sun) that overlap with this month
         first_monday = start_date - timedelta(days=start_date.weekday())
         month_weeks = []
         wk_start = first_monday
@@ -782,16 +1012,28 @@ class ReportGenerator:
             emp_query = emp_query.filter(Employee.work_mode.ilike(work_mode))
         all_employees = emp_query.order_by(Employee.name).all()
 
-        daily_records = self.db.query(DailyAttendance).filter(
+        overall_start = month_weeks[0][0] if month_weeks else start_date
+        overall_end = month_weeks[-1][1] if month_weeks else end_date
+
+        emp_codes = [e.code for e in all_employees]
+        all_daily_by_emp = self._batch_load_daily_attendance(overall_start, overall_end, emp_codes)
+        self._preload_holidays(overall_start, overall_end)
+        leave_emails = [
+            emp.email for emp in all_employees
+            if emp.email and (emp.work_mode or 'WFO').upper() != 'WFH'
+        ]
+        self._batch_preload_leaves(leave_emails, overall_start, overall_end)
+
+        daily_records_in_month = self.db.query(DailyAttendance).filter(
             and_(
                 DailyAttendance.date >= start_date,
                 DailyAttendance.date <= end_date
             )
         ).all()
 
-        emp_daily_map = {}
-        for rec in daily_records:
-            emp_daily_map.setdefault(rec.employee_code, []).append(rec)
+        emp_month_records = {}
+        for rec in daily_records_in_month:
+            emp_month_records.setdefault(rec.employee_code, []).append(rec)
 
         final = []
         for emp in all_employees:
@@ -799,7 +1041,7 @@ class ReportGenerator:
             is_exempted = emp_work_mode == "WFH"
             mode_config = self.work_mode_config.get(emp_work_mode, self.work_mode_config['WFO'])
 
-            records = emp_daily_map.get(emp.code, [])
+            records = emp_month_records.get(emp.code, [])
 
             wfo_days = sum(1 for r in records if (r.total_office_minutes or 0) > 0)
             wfh_days = working_days - wfo_days
@@ -819,11 +1061,13 @@ class ReportGenerator:
                 required_days = 0
             else:
                 required_days = mode_config.get('required_days', 0)
+                emp_daily_map = all_daily_by_emp.get(emp.code, {})
 
                 weekly_statuses = []
-                for wk_start, wk_end in month_weeks:
-                    result = self._compute_employee_weekly_compliance(
-                        emp.code, wk_start, wk_end, emp_work_mode
+                for wk_s, wk_e in month_weeks:
+                    result = self._compute_weekly_compliance_fast(
+                        emp.code, wk_s, wk_e, emp_work_mode,
+                        emp_daily_map, emp.email
                     )
                     weekly_statuses.append(result['status'])
 
@@ -897,7 +1141,7 @@ class ReportGenerator:
                     work_mode = (emp.work_mode or 'WFO').upper()
                     is_wfh = work_mode == 'WFH'
                     compliance_label = self._get_daily_compliance_status(
-                        minutes, True, is_wfh, date.isoformat(), emp.email, self.db
+                        minutes, True, is_wfh, target_date.isoformat(), emp.email, self.db
                     )
 
                 results.append({

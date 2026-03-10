@@ -25,7 +25,7 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
-import { useViewYearMonthWeekDate } from '../contexts/DateContext';
+import { useGlobalDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -46,21 +46,14 @@ const CHART_COLORS = {
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const { year, month, weekValue, setYear, setMonth, setWeekValue } = useViewYearMonthWeekDate('dashboard');
+    const { year: selectedYear, month: selectedMonth, week: selectedWeekValue, setYear: setSelectedYear, setMonth: setSelectedMonth, setWeek: setSelectedWeekValue } = useGlobalDate();
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [complianceStats, setComplianceStats] = useState(null);
     const [complianceSettings, setComplianceSettings] = useState(null);
     const [error, setError] = useState(null);
 
-    // Calendar-based year + month + week selection (from global context)
     const currentISO = getCurrentISOWeek();
-    const selectedYear = year;
-    const selectedMonth = month;
-    const selectedWeekValue = weekValue;
-    const setSelectedYear = setYear;
-    const setSelectedMonth = setMonth;
-    const setSelectedWeekValue = setWeekValue;
 
     // Generate weeks for the selected year and month
     const years = useMemo(() => getYearRange(), []);

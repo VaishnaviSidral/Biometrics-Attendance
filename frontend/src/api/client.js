@@ -212,8 +212,6 @@ export const api = {
         return request(`/reports/wfo-compliance?${searchParams}`);
     },
 
-    getAvailableWeeks: () => request('/reports/weeks'),
-
     // Monthly Report (Admin)
     getMonthlyReport: async (params = {}) => {
         const searchParams = new URLSearchParams();

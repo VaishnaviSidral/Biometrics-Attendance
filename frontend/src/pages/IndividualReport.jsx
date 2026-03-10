@@ -21,23 +21,23 @@ import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
-import { useViewMonthDate } from '../contexts/DateContext';
+import { useGlobalDate } from '../contexts/DateContext';
 import { useLocation } from "react-router-dom";
 
 export default function IndividualReport() {
     const { code } = useParams();
     const navigate = useNavigate();
-    const {monthYear, monthValue, setMonthYear, setMonthValue } = useViewMonthDate('individualReport');
+    const { year, month, setYear, setMonth } = useGlobalDate();
     const [loading, setLoading] = useState(true);
     const [report, setReport] = useState(null);
     const [activeTab, setActiveTab] = useState('daily');
     const location = useLocation();
 
     const now = new Date();
-    const selectedYear = monthYear;
-    const selectedMonth = monthValue;
-    const setSelectedYear = setMonthYear;
-    const setSelectedMonth = setMonthValue;
+    const selectedYear = year;
+    const selectedMonth = month;
+    const setSelectedYear = setYear;
+    const setSelectedMonth = setMonth;
 
     useEffect(() => {
         fetchData();

@@ -18,15 +18,31 @@ class RedmineService:
         self.redmine_engine = create_engine(
             f"mysql+pymysql://{settings.REDMINE_DB_USER}:{settings.REDMINE_DB_PASSWORD}"
             f"@{settings.REDMINE_DB_HOST}:{settings.REDMINE_DB_PORT}/{settings.REDMINE_DB_NAME}"
-            f"?charset=utf8mb4"
+            f"?charset=utf8mb4",
+            pool_pre_ping=True,
+            pool_recycle=3600,
         )
         self.RedmineSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.redmine_engine)
+        self._user_id_cache: Dict[str, Optional[int]] = {}
+        self._leave_issue_ids: Optional[list] = None
     
+    def _get_leave_issue_ids(self, session) -> list:
+        """Return leave issue IDs, cached for the process lifetime."""
+        if self._leave_issue_ids is None:
+            result = session.execute(text(
+                "SELECT id FROM issues WHERE project_id = 994"
+            ))
+            self._leave_issue_ids = [row[0] for row in result.fetchall()]
+        return self._leave_issue_ids
+
     def get_user_id_by_email(self, email: str) -> Optional[int]:
-        """Get user_id from email_addresses table using email"""
+        """Get user_id from email_addresses table using email (cached)."""
         if not email:
             return None
-            
+
+        if email in self._user_id_cache:
+            return self._user_id_cache[email]
+
         try:
             with self.RedmineSessionLocal() as session:
                 query = text("""
@@ -38,7 +54,9 @@ class RedmineService:
                 """)
                 result = session.execute(query, {"email": email})
                 row = result.fetchone()
-                return row[0] if row else None
+                uid = row[0] if row else None
+                self._user_id_cache[email] = uid
+                return uid
         except Exception as e:
             logger.error(f"Error getting user_id for email {email}: {str(e)}")
             return None
@@ -60,19 +78,10 @@ class RedmineService:
         
         try:
             with self.RedmineSessionLocal() as session:
-                # First get leave issue IDs (project_id = 994)
-                leave_issues_query = text("""
-                    SELECT id 
-                    FROM issues 
-                    WHERE project_id = 994
-                """)
-                leave_issues_result = session.execute(leave_issues_query)
-                leave_issue_ids = [row[0] for row in leave_issues_result.fetchall()]
-                
+                leave_issue_ids = self._get_leave_issue_ids(session)
                 if not leave_issue_ids:
                     return False
                 
-                # Check if user has time entry for leave on the given date
                 time_entry_query = text("""
                     SELECT COUNT(*) as count
                     FROM time_entries 
@@ -115,19 +124,10 @@ class RedmineService:
         
         try:
             with self.RedmineSessionLocal() as session:
-                # Get leave issue IDs
-                leave_issues_query = text("""
-                    SELECT id 
-                    FROM issues 
-                    WHERE project_id = 994
-                """)
-                leave_issues_result = session.execute(leave_issues_query)
-                leave_issue_ids = [row[0] for row in leave_issues_result.fetchall()]
-                
+                leave_issue_ids = self._get_leave_issue_ids(session)
                 if not leave_issue_ids:
                     return []
                 
-                # Get all leave dates in the period
                 time_entries_query = text("""
                     SELECT DISTINCT spent_on
                     FROM time_entries 
@@ -151,6 +151,60 @@ class RedmineService:
         except Exception as e:
             logger.error(f"Error getting leave days for {email} from {start_date} to {end_date}: {str(e)}")
             return []
+
+    def get_leave_days_for_employees(
+        self, emails: list, start_date: str, end_date: str
+    ) -> Dict[str, list]:
+        """
+        Batch-load leave days for multiple employees in a single DB round-trip.
+        Returns {email: [date, ...]} mapping.
+        """
+        if not emails:
+            return {}
+
+        email_to_uid = {}
+        for email in emails:
+            uid = self.get_user_id_by_email(email)
+            if uid is not None:
+                email_to_uid[email] = uid
+
+        if not email_to_uid:
+            return {}
+
+        uid_to_email = {uid: email for email, uid in email_to_uid.items()}
+
+        try:
+            with self.RedmineSessionLocal() as session:
+                leave_issue_ids = self._get_leave_issue_ids(session)
+                if not leave_issue_ids:
+                    return {}
+
+                query = text("""
+                    SELECT user_id, spent_on
+                    FROM time_entries
+                    WHERE user_id IN :user_ids
+                    AND issue_id IN :leave_issue_ids
+                    AND spent_on BETWEEN :start_date AND :end_date
+                    ORDER BY spent_on
+                """)
+
+                result = session.execute(query, {
+                    "user_ids": tuple(uid_to_email.keys()),
+                    "leave_issue_ids": tuple(leave_issue_ids),
+                    "start_date": start_date,
+                    "end_date": end_date,
+                })
+
+                out: Dict[str, list] = {email: [] for email in email_to_uid}
+                for uid, spent_on in result.fetchall():
+                    email = uid_to_email.get(uid)
+                    if email:
+                        out[email].append(spent_on)
+                return out
+
+        except Exception as e:
+            logger.error(f"Error batch-loading leave days: {str(e)}")
+            return {}
 
 
 # Create a singleton instance

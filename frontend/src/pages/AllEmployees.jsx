@@ -4,7 +4,7 @@ import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
 import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
-import { useViewYearMonthWeekDate } from '../contexts/DateContext';
+import { useGlobalDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -20,7 +20,7 @@ import { useLocation } from "react-router-dom";
 export default function AllEmployees() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { year, month, weekValue, setYear, setMonth, setWeekValue } = useViewYearMonthWeekDate('allEmployees');
+    const { year, month, week: weekValue, setYear, setMonth, setWeek: setWeekValue } = useGlobalDate();
     const [loading, setLoading] = useState(true);
     const [complianceSettings, setComplianceSettings] = useState(null);
     const [employees, setEmployees] = useState([]);

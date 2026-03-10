@@ -2,14 +2,14 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, Search, Calendar } from "lucide-react";
 import api from "../api/client";
-import { useViewMonthDate } from "../contexts/DateContext";
+import { useGlobalDate } from "../contexts/DateContext";
 import { statusToCssClass } from "../components/StatusBadge";
 import { getYearRange, getMonthNames } from "../utils/isoWeek";
 import { useMemo } from "react";
 export default function MonthlyReport({ workMode }) {
     const navigate = useNavigate();
-    const { monthString, setMonthString } = useViewMonthDate('monthlyReport');
-    const [month, setMonthLocal] = useState(monthString);
+    const { year: globalYear, month: globalMonth, setYear: setGlobalYear, setMonth: setGlobalMonth } = useGlobalDate();
+    const month = `${globalYear}-${String(globalMonth).padStart(2, "0")}`;
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [data, setData] = useState([]);
@@ -17,28 +17,16 @@ export default function MonthlyReport({ workMode }) {
     const [complianceSettings, setComplianceSettings] = useState(null);
     const years = useMemo(() => getYearRange(), []);
     const months = useMemo(() => getMonthNames(), []);
-    const selectedYear = month ? Number(month.split("-")[0]) : "";
-    const selectedMonth = month ? Number(month.split("-")[1]) : "";
+    const selectedYear = globalYear;
+    const selectedMonth = globalMonth;
 
     const handleYearChange = (year) => {
-        const newMonth = `${year}-${String(selectedMonth || 1).padStart(2, "0")}`;
-        setMonth(newMonth);
-    };
-    
-    const handleMonthChange = (monthValue) => {
-        const newMonth = `${selectedYear}-${String(monthValue).padStart(2, "0")}`;
-        setMonth(newMonth);
-    };
-    // Sync local month with global context
-    const setMonth = (val) => {
-        setMonthLocal(val);
-        setMonthString(val);
+        setGlobalYear(year);
     };
 
-    // Sync from context on mount (no need for default useEffect)
-    useEffect(() => {
-        setMonthLocal(monthString);
-    }, [monthString]);
+    const handleMonthChange = (monthValue) => {
+        setGlobalMonth(monthValue);
+    };
 
     // Fetch compliance settings on mount
     useEffect(() => {
@@ -104,14 +92,7 @@ export default function MonthlyReport({ workMode }) {
 
     const handleEmployeeClick = (employeeCode) => {
         if (!month) return;
-    
-        const [y, m] = month.split('-').map(Number);
-    
-        if (y && m) {
-            localStorage.setItem('date_individualReport_month_year', String(y));
-            localStorage.setItem('date_individualReport_month_value', String(m));
-        }
-    
+
         navigate(`/employee/${employeeCode}`, {
             state: {
                 from: "monthly-report",
