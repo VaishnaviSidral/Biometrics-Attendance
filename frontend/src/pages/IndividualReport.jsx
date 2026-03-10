@@ -1,4 +1,4 @@
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -21,15 +21,17 @@ import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
 import DataTable from '../components/DataTable';
-import { useGlobalDate } from '../contexts/DateContext';
+import { useViewMonthDate } from '../contexts/DateContext';
+import { useLocation } from "react-router-dom";
 
 export default function IndividualReport() {
     const { code } = useParams();
     const navigate = useNavigate();
-    const {monthYear, monthValue, setMonthYear, setMonthValue } = useGlobalDate();
+    const {monthYear, monthValue, setMonthYear, setMonthValue } = useViewMonthDate('individualReport');
     const [loading, setLoading] = useState(true);
     const [report, setReport] = useState(null);
     const [activeTab, setActiveTab] = useState('daily');
+    const location = useLocation();
 
     const now = new Date();
     const selectedYear = monthYear;
@@ -79,7 +81,28 @@ export default function IndividualReport() {
         }
     };
     
+    const handleBack = () => {
 
+        if (location.state?.from === "monthly-report") {
+    
+            const mode = location.state?.workMode || "wfo";
+    
+            navigate(`/monthly-report/${mode.toLowerCase()}`);
+    
+        } else if (location.state?.from === "all-employees") {
+    
+            navigate("/employees", {
+                state: {
+                    tab: location.state?.tab
+                }
+            });
+    
+        } else {
+    
+            navigate("/employees");
+    
+        }
+    };
     const dailyColumns = [
         {
             key: 'date',
@@ -228,7 +251,7 @@ export default function IndividualReport() {
             <div className="flex items-center gap-4 mb-6">
                 <button
                     className="btn btn-ghost btn-icon"
-                    onClick={() => navigate('/employees')}
+                    onClick={handleBack}
                 >
                     <ArrowLeft size={20} />
                 </button>

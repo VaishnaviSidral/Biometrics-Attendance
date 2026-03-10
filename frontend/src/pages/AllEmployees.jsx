@@ -4,7 +4,7 @@ import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
 import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
-import { useGlobalDate } from '../contexts/DateContext';
+import { useViewYearMonthWeekDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -15,11 +15,12 @@ import {
     getWeeksInMonth,
     getMonthNames,
 } from '../utils/isoWeek';
+import { useLocation } from "react-router-dom";
 
 export default function AllEmployees() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { year, month, weekValue, setYear, setMonth, setWeekValue } = useGlobalDate();
+    const { year, month, weekValue, setYear, setMonth, setWeekValue } = useViewYearMonthWeekDate('allEmployees');
     const [loading, setLoading] = useState(true);
     const [complianceSettings, setComplianceSettings] = useState(null);
     const [employees, setEmployees] = useState([]);
@@ -30,7 +31,7 @@ export default function AllEmployees() {
     const [buHeads, setBuHeads] = useState([]);
     const [selectedBUHead, setSelectedBUHead] = useState('');
     const [employeeBUMap, setEmployeeBUMap] = useState({}); // employee_code → bu_head
-
+    const location = useLocation();
 
     // Work mode tab: '' = All, 'WFO', 'HYBRID', 'WFH'
     const [workModeTab, setWorkModeTab] = useState('');
@@ -53,6 +54,12 @@ export default function AllEmployees() {
             setWeekValue(`${y}-W${String(w).padStart(2, '0')}`);
         }
     }, []); // only on mount
+
+    useEffect(() => {
+        if (location.state?.tab) {
+            setWorkModeTab(location.state.tab);
+        }
+    }, []);
 
     const selectedYear = year;
     const selectedMonth = month;
@@ -700,7 +707,15 @@ export default function AllEmployees() {
                     columns={columns}
                     data={filteredEmployees}
                     loading={loading}
-                    onRowClick={(row) => navigate(`/employee/${row.employee_code}`)}
+                    onRowClick={(row) =>
+                        navigate(`/employee/${row.employee_code}`, {
+                            state: {
+                                from: "all-employees",
+                                tab: workModeTab,
+                                weekStart: weekStartDate
+                            }
+                        })
+                    }
                     emptyMessage="No employees found. Try adjusting your filters or upload attendance data."
                 />
             </div>

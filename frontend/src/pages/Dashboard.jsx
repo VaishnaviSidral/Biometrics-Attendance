@@ -25,7 +25,7 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
-import { useGlobalDate } from '../contexts/DateContext';
+import { useViewYearMonthWeekDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -46,7 +46,7 @@ const CHART_COLORS = {
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const { year, month, weekValue, setYear, setMonth, setWeekValue } = useGlobalDate();
+    const { year, month, weekValue, setYear, setMonth, setWeekValue } = useViewYearMonthWeekDate('dashboard');
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [complianceStats, setComplianceStats] = useState(null);

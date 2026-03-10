@@ -41,12 +41,12 @@ export function useViewYearMonthWeekDate(viewKey) {
     });
 
     const [month, setMonthState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_month`);
+        const saved = localStorage.getItem(`${PREFIX}_month`);
         return saved ? Number(saved) : new Date().getMonth() + 1;
     });
 
     const [weekValue, setWeekValueState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_week_value`);
+        const saved = localStorage.getItem(`${PREFIX}_week_value`);
         return saved || getDefaultWeek().weekValue;
     });
 
@@ -74,12 +74,12 @@ export function useViewWeekDate(viewKey) {
     const PREFIX = `date_${viewKey}`;
 
     const [weekYear, setWeekYearState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_week_year`);
+        const saved = localStorage.getItem(`${PREFIX}_week_year`);
         return saved ? Number(saved) : getDefaultWeek().year;
     });
 
     const [weekValue, setWeekValueState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_week_value`);
+        const saved = localStorage.getItem(`${PREFIX}_week_value`);
         return saved || getDefaultWeek().weekValue;
     });
 
@@ -102,12 +102,12 @@ export function useViewMonthDate(viewKey) {
     const PREFIX = `date_${viewKey}`;
 
     const [monthYear, setMonthYearState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_month_year`);
+        const saved = localStorage.getItem(`${PREFIX}_month_year`);
         return saved ? Number(saved) : getDefaultMonth().year;
     });
 
     const [monthValue, setMonthValueState] = useState(() => {
-        const saved = sessionStorage.getItem(`${PREFIX}_month_value`);
+        const saved = localStorage.getItem(`${PREFIX}_month_value`);
         return saved ? Number(saved) : getDefaultMonth().month;
     });
 

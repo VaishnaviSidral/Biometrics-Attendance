@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Download, Search, Calendar } from "lucide-react";
 import api from "../api/client";
 import { useViewMonthDate } from "../contexts/DateContext";
 import { statusToCssClass } from "../components/StatusBadge";
-
+import { getYearRange, getMonthNames } from "../utils/isoWeek";
+import { useMemo } from "react";
 export default function MonthlyReport({ workMode }) {
+    const navigate = useNavigate();
     const { monthString, setMonthString } = useViewMonthDate('monthlyReport');
     const [month, setMonthLocal] = useState(monthString);
     const [searchTerm, setSearchTerm] = useState("");
@@ -12,7 +15,20 @@ export default function MonthlyReport({ workMode }) {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [complianceSettings, setComplianceSettings] = useState(null);
+    const years = useMemo(() => getYearRange(), []);
+    const months = useMemo(() => getMonthNames(), []);
+    const selectedYear = month ? Number(month.split("-")[0]) : "";
+    const selectedMonth = month ? Number(month.split("-")[1]) : "";
 
+    const handleYearChange = (year) => {
+        const newMonth = `${year}-${String(selectedMonth || 1).padStart(2, "0")}`;
+        setMonth(newMonth);
+    };
+    
+    const handleMonthChange = (monthValue) => {
+        const newMonth = `${selectedYear}-${String(monthValue).padStart(2, "0")}`;
+        setMonth(newMonth);
+    };
     // Sync local month with global context
     const setMonth = (val) => {
         setMonthLocal(val);
@@ -86,6 +102,25 @@ export default function MonthlyReport({ workMode }) {
         }
     };
 
+    const handleEmployeeClick = (employeeCode) => {
+        if (!month) return;
+    
+        const [y, m] = month.split('-').map(Number);
+    
+        if (y && m) {
+            localStorage.setItem('date_individualReport_month_year', String(y));
+            localStorage.setItem('date_individualReport_month_value', String(m));
+        }
+    
+        navigate(`/employee/${employeeCode}`, {
+            state: {
+                from: "monthly-report",
+                workMode: workMode,
+                month: month
+            }
+        });
+    };
+
     // Summary counts
     const totalEmployees = data.length;
     const exemptedCount = data.filter((e) => e.exempted).length;
@@ -122,12 +157,31 @@ export default function MonthlyReport({ workMode }) {
                     {/* Month Filter */}
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Month</label>
-                        <input
-                            type="month"
-                            className="form-input"
-                            value={month}
-                            onChange={(e) => setMonth(e.target.value)}
-                        />
+                        <div style={{ display: "flex", gap: "8px" }}>
+                        {/* Year */}
+                        <select
+                            className="form-input form-select"
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(Number(e.target.value))}
+                            style={{ width: "110px" }}
+                        >
+                            {years.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+
+                        {/* Month */}
+                        <select
+                            className="form-input form-select"
+                            value={selectedMonth}
+                            onChange={(e) => handleMonthChange(Number(e.target.value))}
+                            style={{ width: "140px" }}
+                        >
+                            {months.map((m, i) => (
+                                <option key={i + 1} value={i + 1}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
                     </div>
 
                     {/* Employee Search */}
@@ -189,7 +243,7 @@ export default function MonthlyReport({ workMode }) {
                             <tr>
                                 <th>Employee</th>
                                 <th>Mode</th>
-                                <th>Exempted</th>
+                                {/* <th>Exempted</th> */}
                                 {/* <th>WFO Days</th>
                                 <th>WFH Days</th> */}
                                 <th>Compliance</th>
@@ -227,7 +281,11 @@ export default function MonthlyReport({ workMode }) {
                                     };
 
                                     return (
-                                        <tr key={row.employee_code || index}>
+                                        <tr
+                                            key={row.employee_code || index}
+                                            onClick={() => handleEmployeeClick(row.employee_code)}
+                                            style={{ cursor: 'pointer' }}
+                                        >
                                             {/* Employee */}
                                             <td>
                                                 <div className="cell-employee">
@@ -263,7 +321,7 @@ export default function MonthlyReport({ workMode }) {
                                             </td>
 
                                             {/* Exempted */}
-                                            <td>
+                                            {/* <td>
                                                 <span
                                                     style={{
                                                         padding: "2px 8px",
@@ -276,7 +334,7 @@ export default function MonthlyReport({ workMode }) {
                                                 >
                                                     {row.exempted ? "YES" : "NO"}
                                                 </span>
-                                            </td>
+                                            </td> */}
 
                                             {/* WFO Days */}
                                             {/* <td>
