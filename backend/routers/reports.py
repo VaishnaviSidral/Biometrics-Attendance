@@ -94,8 +94,7 @@ async def get_all_employees_report(
             sort_order=sort_order,
             status_filter=status_filter,
             work_mode_filter=work_mode
-        ),
-        "available_weeks": generator.get_available_weeks()
+        )
     }
 
 
@@ -133,19 +132,8 @@ async def get_wfo_compliance_report(
     week_date = parse_date(week_start)
 
     report = generator.get_wfo_compliance_report(week_start=week_date)
-    report['available_weeks'] = generator.get_available_weeks()
 
     return report
-
-
-@router.get("/weeks")
-async def get_available_weeks(
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin)
-):
-    """Get list of available weeks"""
-    generator = ReportGenerator(db)
-    return {"weeks": generator.get_available_weeks()}
 
 
 @router.get("/monthly-report")
@@ -210,64 +198,6 @@ async def export_monthly_report_csv(
             "Content-Disposition": f"attachment; filename=monthly_report_{month}.csv"
         }
     )
-
-
-# @router.get("/monthly-report/export/{employee_code}")
-# async def export_monthly_individual_csv(
-#     employee_code: str,
-#     month: str = Query(..., description="Month in YYYY-MM format"),
-#     db: Session = Depends(get_db),
-#     current_user: CurrentUser = Depends(require_admin)
-# ):
-#     """Export individual employee monthly attendance as CSV"""
-#     from datetime import datetime as dt_mod
-#     import calendar as cal_mod
-
-#     year, mon = map(int, month.split("-"))
-#     start_date = date(year, mon, 1)
-#     _, days_in = cal_mod.monthrange(year, mon)
-#     end_date = date(year, mon, days_in)
-
-#     generator = ReportGenerator(db)
-#     report = generator.get_individual_report(
-#         employee_code=employee_code,
-#         start_date=start_date,
-#         end_date=end_date
-#     )
-
-#     if not report:
-#         raise HTTPException(status_code=404, detail="Employee not found")
-
-#     output = io.StringIO()
-#     writer = csv.writer(output)
-
-#     month_label = start_date.strftime('%B %Y')
-#     writer.writerow([f'Monthly Report - {month_label}'])
-#     writer.writerow(['Code', report['employee']['code']])
-#     writer.writerow(['Name', report['employee']['name']])
-#     writer.writerow(['Work Mode', report['employee']['work_mode']])
-#     writer.writerow(['Department', report['employee']['department'] or ''])
-#     writer.writerow([])
-#     writer.writerow(['Date', 'Day', 'First In', 'Last Out', 'Total Hours', 'Status'])
-
-#     for day in report['daily_records']:
-#         writer.writerow([
-#             day['date'],
-#             day['day'],
-#             day['first_in'],
-#             day['last_out'],
-#             day['total_hours'],
-#             day['status']
-#         ])
-
-#     output.seek(0)
-#     return StreamingResponse(
-#         iter([output.getvalue()]),
-#         media_type="text/csv",
-#         headers={
-#             "Content-Disposition": f"attachment; filename={employee_code}_{month}_report.csv"
-#         }
-#     )
 
 
 @router.get("/export/all-employees")

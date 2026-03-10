@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react';
-import { Save, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Save, RefreshCw, Upload, Calendar, X } from 'lucide-react';
 import api from '../api/client';
 
 export default function Settings() {
-    const [settings, setSettings] = useState(null);
+    const [settings, setSettings] = useState({});
     const [loading, setLoading] = useState(true);
     const [saved, setSaved] = useState(false);
+    const [error, setError] = useState(null);
+    
+    // Holiday upload state
+    const [holidayFile, setHolidayFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [uploadResult, setUploadResult] = useState(null);
+    const [showUploadResult, setShowUploadResult] = useState(false);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         fetchSettings();
@@ -40,6 +48,37 @@ export default function Settings() {
             console.error('Error saving settings:', err);
             alert('Failed to save settings. Please try again.');
         }
+    };
+
+    const handleHolidayUpload = async () => {
+
+        if (!holidayFile) {
+            setError("Please select a CSV or Excel file");
+            return;
+        }
+    
+        setUploading(true);
+        setError('');
+    
+        const formData = new FormData();
+        formData.append("file", holidayFile);
+    
+        try {
+            const res = await fetch("/api/holidays/upload", {
+                method: "POST",
+                body: formData
+            });
+    
+            const data = await res.json();
+    
+            setUploadResult(data);
+            setShowUploadResult(true);
+    
+        } catch (err) {
+            setError("Upload failed. Please try again.");
+        }
+    
+        setUploading(false);
     };
 
     if (loading) {
@@ -183,6 +222,111 @@ export default function Settings() {
                 </div>
             </div>
 
+            {/* Holiday Upload Section */}
+            <div className="card mb-6">
+                <h3 className="card-title mb-6">
+                    <Calendar size={20} style={{ marginRight: '8px' }} />
+                    Upload Holidays
+                </h3>
+
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                    gap: 'var(--spacing-6)'
+                }}>
+                   <div className="form-group">
+                    <label className="form-label">Holiday File (CSV / Excel)</label>
+
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        className="form-input"
+                        onChange={(e) => {
+                            setHolidayFile(e.target.files[0]);
+                            setError('');
+                            setShowUploadResult(false);
+                        }}
+                    />
+
+                    {/* SUCCESS / RESULT MESSAGE */}
+                    {showUploadResult && uploadResult && (
+                        <div style={{
+                            marginTop: '8px',
+                            fontSize: '14px',
+                            color: uploadResult.summary.errors > 0 ? '#dc2626' : '#16a34a'
+                        }}>
+                            {uploadResult.summary.errors > 0
+                                ? `Upload completed with ${uploadResult.summary.errors} errors`
+                                            : 'Holiday file uploaded successfully'}
+                        </div>
+                    )}
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={handleHolidayUpload}
+                        disabled={uploading}
+                        style={{ marginTop: '10px' }}
+                    >
+                        {uploading ? 'Uploading...' : 'Upload Holidays'}
+                    </button>
+                </div>
+                </div>
+
+                {showUploadResult && uploadResult && (
+                    <div style={{
+                        marginTop: 'var(--spacing-5)',
+                        padding: 'var(--spacing-4)',
+                        borderRadius: 'var(--radius-lg)',
+                        background: uploadResult.summary.errors > 0 ? '#fef2f2' : '#f0fdf4',
+                        border: `1px solid ${uploadResult.summary.errors > 0 ? '#fecaca' : '#bbf7d0'}`
+                    }}>
+                        <h4 style={{ marginBottom: '8px' }}>
+                            {uploadResult.summary.errors > 0 ? 'Upload Completed With Errors' : 'Upload Successful'}
+                        </h4>
+
+                        <p>Total rows: {uploadResult.summary.total_rows}</p>
+                        <p>Created: {uploadResult.summary.created}</p>
+                        <p>Updated: {uploadResult.summary.updated}</p>
+
+                        {uploadResult.summary.errors > 0 && (
+                            <p style={{ color: '#dc2626' }}>
+                                Errors: {uploadResult.summary.errors}
+                            </p>
+                        )}
+
+                        {uploadResult.errors && uploadResult.errors.length > 0 && (
+                            <details style={{ marginTop: '10px' }}>
+                                <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
+                                    View Error Details
+                                </summary>
+
+                                <ul style={{ marginTop: '10px', paddingLeft: '20px' }}>
+                                    {uploadResult.errors.map((err, index) => (
+                                        <li key={index} style={{ fontSize: '13px' }}>
+                                            {err}
+                                        </li>
+                                    ))}
+                                </ul>
+                            </details>
+                        )}
+                    </div>
+                )}
+
+                {error && (
+                    <div style={{
+                        marginTop: 'var(--spacing-4)',
+                        padding: 'var(--spacing-3)',
+                        background: '#fee2e2',
+                        border: '1px solid #fecaca',
+                        borderRadius: 'var(--radius-md)',
+                        color: '#b91c1c'
+                    }}>
+                        {error}
+                    </div>
+                )}
+            </div>
+
             {/* Hour-Based Compliance Thresholds */}
             <div className="card mb-6">
                 <h3 className="card-title mb-6">Hour-Based Compliance Thresholds</h3>
@@ -210,10 +354,11 @@ export default function Settings() {
                             value={complianceHrs}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                compliance_hours: parseInt(e.target.value)
+                                compliance_hours: parseFloat(e.target.value)
                             })}
-                            min="1"
+                            min="0.5"
                             max="24"
+                            step="0.5"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
@@ -234,10 +379,11 @@ export default function Settings() {
                             value={midComplianceHrs}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                mid_compliance_hours: parseInt(e.target.value)
+                                mid_compliance_hours: parseFloat(e.target.value)
                             })}
-                            min="1"
+                            min="0.5"
                             max="24"
+                            step="0.5"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',
@@ -258,10 +404,11 @@ export default function Settings() {
                             value={nonComplianceHrs}
                             onChange={(e) => setSettings({
                                 ...settings,
-                                non_compliance_hours: parseInt(e.target.value)
+                                non_compliance_hours: parseFloat(e.target.value)
                             })}
                             min="0"
                             max="24"
+                            step="0.5"
                         />
                         <p style={{
                             fontSize: 'var(--font-size-xs)',

@@ -148,6 +148,25 @@ export const api = {
         body: JSON.stringify(data)
     }),
 
+    // Holidays
+    uploadHolidays: async (formData) => {
+        return request('/holidays/upload', {
+            method: 'POST',
+            body: formData,
+        });
+    },
+
+    getHolidays: (params = {}) => {
+        const searchParams = new URLSearchParams(params);
+        return request(`/holidays?${searchParams}`);
+    },
+
+    deleteHoliday: (id) => request(`/holidays/${id}`, {
+        method: 'DELETE'
+    }),
+
+    checkHoliday: (date) => request(`/holidays/check/${date}`),
+
     // Upload
     uploadFile: async (file) => {
         const formData = new FormData();
@@ -192,8 +211,6 @@ export const api = {
         const searchParams = new URLSearchParams(params);
         return request(`/reports/wfo-compliance?${searchParams}`);
     },
-
-    getAvailableWeeks: () => request('/reports/weeks'),
 
     // Monthly Report (Admin)
     getMonthlyReport: async (params = {}) => {

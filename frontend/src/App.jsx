@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { DateProvider } from './contexts/DateContext';
 
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
@@ -142,7 +143,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <DateProvider>
           <Layout />
+        </DateProvider>
       </AuthProvider>
     </BrowserRouter>
   );

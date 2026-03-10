@@ -102,7 +102,6 @@ async def google_login(
 
     # Step 3: Determine role from admins table
     role, employee_code = get_user_role(email, db)
-
     # Step 4: Create JWT
     access_token = create_access_token(
         data={
@@ -111,7 +110,7 @@ async def google_login(
             "name": name,
             "employee_code": employee_code
         },
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta=timedelta(days=7)
     )
 
     return LoginResponse(
@@ -171,7 +170,7 @@ async def email_login(
             "name": name,
             "employee_code": employee_code
         },
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_delta=timedelta(days=7)
     )
 
     return LoginResponse(

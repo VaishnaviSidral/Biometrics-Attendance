@@ -1,28 +1,32 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Download, Search, Calendar } from "lucide-react";
 import api from "../api/client";
-import { useViewMonthDate } from "../contexts/DateContext";
+import { useGlobalDate } from "../contexts/DateContext";
 import { statusToCssClass } from "../components/StatusBadge";
-
+import { getYearRange, getMonthNames } from "../utils/isoWeek";
+import { useMemo } from "react";
 export default function MonthlyReport({ workMode }) {
-    const { monthString, setMonthString } = useViewMonthDate('monthlyReport');
-    const [month, setMonthLocal] = useState(monthString);
+    const navigate = useNavigate();
+    const { year: globalYear, month: globalMonth, setYear: setGlobalYear, setMonth: setGlobalMonth } = useGlobalDate();
+    const month = `${globalYear}-${String(globalMonth).padStart(2, "0")}`;
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [complianceSettings, setComplianceSettings] = useState(null);
+    const years = useMemo(() => getYearRange(), []);
+    const months = useMemo(() => getMonthNames(), []);
+    const selectedYear = globalYear;
+    const selectedMonth = globalMonth;
 
-    // Sync local month with global context
-    const setMonth = (val) => {
-        setMonthLocal(val);
-        setMonthString(val);
+    const handleYearChange = (year) => {
+        setGlobalYear(year);
     };
 
-    // Sync from context on mount (no need for default useEffect)
-    useEffect(() => {
-        setMonthLocal(monthString);
-    }, [monthString]);
+    const handleMonthChange = (monthValue) => {
+        setGlobalMonth(monthValue);
+    };
 
     // Fetch compliance settings on mount
     useEffect(() => {
@@ -86,6 +90,18 @@ export default function MonthlyReport({ workMode }) {
         }
     };
 
+    const handleEmployeeClick = (employeeCode) => {
+        if (!month) return;
+
+        navigate(`/employee/${employeeCode}`, {
+            state: {
+                from: "monthly-report",
+                workMode: workMode,
+                month: month
+            }
+        });
+    };
+
     // Summary counts
     const totalEmployees = data.length;
     const exemptedCount = data.filter((e) => e.exempted).length;
@@ -122,12 +138,31 @@ export default function MonthlyReport({ workMode }) {
                     {/* Month Filter */}
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Month</label>
-                        <input
-                            type="month"
-                            className="form-input"
-                            value={month}
-                            onChange={(e) => setMonth(e.target.value)}
-                        />
+                        <div style={{ display: "flex", gap: "8px" }}>
+                        {/* Year */}
+                        <select
+                            className="form-input form-select"
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(Number(e.target.value))}
+                            style={{ width: "110px" }}
+                        >
+                            {years.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+
+                        {/* Month */}
+                        <select
+                            className="form-input form-select"
+                            value={selectedMonth}
+                            onChange={(e) => handleMonthChange(Number(e.target.value))}
+                            style={{ width: "140px" }}
+                        >
+                            {months.map((m, i) => (
+                                <option key={i + 1} value={i + 1}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
                     </div>
 
                     {/* Employee Search */}
@@ -189,7 +224,7 @@ export default function MonthlyReport({ workMode }) {
                             <tr>
                                 <th>Employee</th>
                                 <th>Mode</th>
-                                <th>Exempted</th>
+                                {/* <th>Exempted</th> */}
                                 {/* <th>WFO Days</th>
                                 <th>WFH Days</th> */}
                                 <th>Compliance</th>
@@ -227,7 +262,11 @@ export default function MonthlyReport({ workMode }) {
                                     };
 
                                     return (
-                                        <tr key={row.employee_code || index}>
+                                        <tr
+                                            key={row.employee_code || index}
+                                            onClick={() => handleEmployeeClick(row.employee_code)}
+                                            style={{ cursor: 'pointer' }}
+                                        >
                                             {/* Employee */}
                                             <td>
                                                 <div className="cell-employee">
@@ -263,7 +302,7 @@ export default function MonthlyReport({ workMode }) {
                                             </td>
 
                                             {/* Exempted */}
-                                            <td>
+                                            {/* <td>
                                                 <span
                                                     style={{
                                                         padding: "2px 8px",
@@ -276,7 +315,7 @@ export default function MonthlyReport({ workMode }) {
                                                 >
                                                     {row.exempted ? "YES" : "NO"}
                                                 </span>
-                                            </td>
+                                            </td> */}
 
                                             {/* WFO Days */}
                                             {/* <td>

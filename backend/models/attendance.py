@@ -20,6 +20,7 @@ class ComplianceStatus(str, enum.Enum):
     NON_COMPLIANCE = "Non-Compliance"
     MID_COMPLIANCE = "Mid-Compliance"
     COMPLIANCE = "Compliance"
+    LEAVE = "Leave"
 
 
 class AttendanceLog(Base):

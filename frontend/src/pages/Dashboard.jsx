@@ -25,12 +25,14 @@ import {
 import api from '../api/client';
 import SummaryCard from '../components/SummaryCard';
 import StatusBadge from '../components/StatusBadge';
-import { useViewWeekDate } from '../contexts/DateContext';
+import { useGlobalDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
     isoWeekToDateString,
     getYearRange,
+    getWeeksInMonth,
+    getMonthNames,
 } from '../utils/isoWeek';
 
 // Visual chart colors — display-only, no business logic
@@ -44,23 +46,19 @@ const CHART_COLORS = {
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const { weekYear, weekValue, setWeekYear, setWeekValue } = useViewWeekDate('dashboard');
+    const { year: selectedYear, month: selectedMonth, week: selectedWeekValue, setYear: setSelectedYear, setMonth: setSelectedMonth, setWeek: setSelectedWeekValue } = useGlobalDate();
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [complianceStats, setComplianceStats] = useState(null);
     const [complianceSettings, setComplianceSettings] = useState(null);
     const [error, setError] = useState(null);
 
-    // Calendar-based year + week selection (from global context)
     const currentISO = getCurrentISOWeek();
-    const selectedYear = weekYear;
-    const selectedWeekValue = weekValue;
-    const setSelectedYear = setWeekYear;
-    const setSelectedWeekValue = setWeekValue;
 
-    // Generate ISO weeks for the selected year (calendar-driven, never from DB)
+    // Generate weeks for the selected year and month
     const years = useMemo(() => getYearRange(), []);
-    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+    const months = useMemo(() => getMonthNames(), []);
+    const isoWeeks = useMemo(() => getWeeksInMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
 
     // Chart & modal state
     const [chartData, setChartData] = useState([]);
@@ -126,16 +124,27 @@ export default function Dashboard() {
         }
     };
 
-    // When year changes, auto-select the first week of that year
-    // (or current week if it's the current year)
+    // When year changes, auto-select current month and first week
     const handleYearChange = (newYear) => {
         setSelectedYear(newYear);
         if (newYear === currentISO.year) {
+            setSelectedMonth(new Date().getMonth() + 1);
             setSelectedWeekValue(
                 `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
             );
         } else {
-            setSelectedWeekValue(`${newYear}-W01`);
+            setSelectedMonth(1);
+            const weeksInJan = getWeeksInMonth(newYear, 1);
+            setSelectedWeekValue(weeksInJan[0]?.value || `${newYear}-W01`);
+        }
+    };
+
+    // When month changes, auto-select first week of that month
+    const handleMonthChange = (newMonth) => {
+        setSelectedMonth(newMonth);
+        const weeksInMonth = getWeeksInMonth(selectedYear, newMonth);
+        if (weeksInMonth.length > 0) {
+            setSelectedWeekValue(weeksInMonth[0].value);
         }
     };
 
@@ -208,7 +217,7 @@ export default function Dashboard() {
                         </p>
                     </div>
 
-                    {/* Year + Week Filters */}
+                    {/* Year + Month + Week Filters */}
                     <div className="flex items-center gap-2">
                         <Calendar size={18} className="text-muted" />
                         <select
@@ -219,6 +228,16 @@ export default function Dashboard() {
                         >
                             {years.map((y) => (
                                 <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                        <select
+                            className="form-input form-select"
+                            value={selectedMonth}
+                            onChange={(e) => handleMonthChange(Number(e.target.value))}
+                            style={{ width: '140px' }}
+                        >
+                            {months.map((m, i) => (
+                                <option key={i + 1} value={i + 1}>{m}</option>
                             ))}
                         </select>
                         <select

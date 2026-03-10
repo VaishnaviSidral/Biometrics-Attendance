@@ -35,16 +35,16 @@ class Settings(BaseSettings):
     THRESHOLD_AMBER: int = 90
 
     # Hour-based compliance thresholds (daily)
-    COMPLIANCE_HOURS: int = 9        # >= 9h → Compliance
-    MID_COMPLIANCE_HOURS: int = 7    # >= 7h → Mid-Compliance
-    NON_COMPLIANCE_HOURS: int = 6    # >= 6h → Non-Compliance, < 6h also Non-Compliance
+    COMPLIANCE_HOURS: float = 9.0        # >= 9h → Compliance
+    MID_COMPLIANCE_HOURS: float = 7.0    # >= 7h → Mid-Compliance
+    NON_COMPLIANCE_HOURS: float = 6.0    # >= 6h → Non-Compliance, < 6h also Non-Compliance
 
     API_PREFIX: str = "/api"
     DEBUG: bool = True
 
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080 # 7 days
 
     # -------- Derived values --------
     @property
@@ -85,7 +85,7 @@ def get_status_color(percentage: float) -> str:
         return "Non-Compliance"
 
 
-def get_status_color_by_hours(total_hours: float, compliance_hours: int, mid_compliance_hours: int, non_compliance_hours: int) -> str:
+def get_status_color_by_hours(total_hours: float, compliance_hours: float, mid_compliance_hours: float, non_compliance_hours: float) -> str:
     """
     Get compliance status based on total working hours (hour-based compliance).
 

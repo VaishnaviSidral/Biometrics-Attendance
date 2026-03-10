@@ -4,7 +4,7 @@ import { Download, Search } from 'lucide-react';
 import api from '../api/client';
 import DataTable from '../components/DataTable';
 import StatusBadge, { statusToCssClass } from '../components/StatusBadge';
-import { useViewWeekDate } from '../contexts/DateContext';
+import { useGlobalDate } from '../contexts/DateContext';
 import {
     getCurrentISOWeek,
     generateISOWeeks,
@@ -12,12 +12,15 @@ import {
     getYearRange,
     getISOYear,
     getISOWeekNumber,
+    getWeeksInMonth,
+    getMonthNames,
 } from '../utils/isoWeek';
+import { useLocation } from "react-router-dom";
 
 export default function AllEmployees() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
-    const { weekYear, weekValue, setWeekYear, setWeekValue } = useViewWeekDate('allEmployees');
+    const { year, month, week: weekValue, setYear, setMonth, setWeek: setWeekValue } = useGlobalDate();
     const [loading, setLoading] = useState(true);
     const [complianceSettings, setComplianceSettings] = useState(null);
     const [employees, setEmployees] = useState([]);
@@ -28,7 +31,7 @@ export default function AllEmployees() {
     const [buHeads, setBuHeads] = useState([]);
     const [selectedBUHead, setSelectedBUHead] = useState('');
     const [employeeBUMap, setEmployeeBUMap] = useState({}); // employee_code → bu_head
-
+    const location = useLocation();
 
     // Work mode tab: '' = All, 'WFO', 'HYBRID', 'WFH'
     const [workModeTab, setWorkModeTab] = useState('');
@@ -36,7 +39,7 @@ export default function AllEmployees() {
     // Dashboard navigation filter: 'non_exempt', 'compliant', 'non_compliant'
     const [dashboardFilter, setDashboardFilter] = useState(searchParams.get('filter') || '');
 
-    // Calendar-based year + week (from global context)
+    // Calendar-based year + month + week (from global context)
     const currentISO = getCurrentISOWeek();
     const urlWeekStart = searchParams.get('week_start');
 
@@ -46,18 +49,28 @@ export default function AllEmployees() {
             const d = new Date(urlWeekStart + 'T00:00:00Z');
             const y = getISOYear(d);
             const w = getISOWeekNumber(d);
-            setWeekYear(y);
+            setYear(y);
+            setMonth(d.getMonth() + 1);
             setWeekValue(`${y}-W${String(w).padStart(2, '0')}`);
         }
     }, []); // only on mount
 
-    const selectedYear = weekYear;
+    useEffect(() => {
+        if (location.state?.tab) {
+            setWorkModeTab(location.state.tab);
+        }
+    }, []);
+
+    const selectedYear = year;
+    const selectedMonth = month;
     const selectedWeekValue = weekValue;
-    const setSelectedYear = setWeekYear;
+    const setSelectedYear = setYear;
+    const setSelectedMonth = setMonth;
     const setSelectedWeekValue = setWeekValue;
 
     const years = useMemo(() => getYearRange(), []);
-    const isoWeeks = useMemo(() => generateISOWeeks(selectedYear), [selectedYear]);
+    const months = useMemo(() => getMonthNames(), []);
+    const isoWeeks = useMemo(() => getWeeksInMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
 
     // Convert ISO week to YYYY-MM-DD for API
     const weekStartDate = useMemo(
@@ -131,11 +144,22 @@ export default function AllEmployees() {
     const handleYearChange = (newYear) => {
         setSelectedYear(newYear);
         if (newYear === currentISO.year) {
+            setSelectedMonth(new Date().getMonth() + 1);
             setSelectedWeekValue(
                 `${currentISO.year}-W${String(currentISO.week).padStart(2, '0')}`
             );
         } else {
-            setSelectedWeekValue(`${newYear}-W01`);
+            setSelectedMonth(1);
+            const weeksInJan = getWeeksInMonth(newYear, 1);
+            setSelectedWeekValue(weeksInJan[0]?.value || `${newYear}-W01`);
+        }
+    };
+
+    const handleMonthChange = (newMonth) => {
+        setSelectedMonth(newMonth);
+        const weeksInMonth = getWeeksInMonth(selectedYear, newMonth);
+        if (weeksInMonth.length > 0) {
+            setSelectedWeekValue(weeksInMonth[0].value);
         }
     };
 
@@ -506,6 +530,20 @@ export default function AllEmployees() {
                         </select>
                     </div>
 
+                    {/* Month Filter */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">Month</label>
+                        <select
+                            className="form-input form-select"
+                            value={selectedMonth}
+                            onChange={(e) => handleMonthChange(Number(e.target.value))}
+                        >
+                            {months.map((m, i) => (
+                                <option key={i + 1} value={i + 1}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {/* Week Filter */}
                     <div className="form-group" style={{ marginBottom: 0 }}>
                         <label className="form-label">Week</label>
@@ -669,7 +707,15 @@ export default function AllEmployees() {
                     columns={columns}
                     data={filteredEmployees}
                     loading={loading}
-                    onRowClick={(row) => navigate(`/employee/${row.employee_code}`)}
+                    onRowClick={(row) =>
+                        navigate(`/employee/${row.employee_code}`, {
+                            state: {
+                                from: "all-employees",
+                                tab: workModeTab,
+                                weekStart: weekStartDate
+                            }
+                        })
+                    }
                     emptyMessage="No employees found. Try adjusting your filters or upload attendance data."
                 />
             </div>

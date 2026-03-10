@@ -26,8 +26,12 @@ Work Mode:
   Hybrid: configurable days office, configurable hours/day
   WFH:    Only tracking, compliance = always "Compliance"
 """
-from datetime import datetime, date, time, timedelta
-from typing import List, Dict, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import List, Dict, Tuple, Optional
+from sqlalchemy.orm import Session
+from models.holidays import Holiday
+from services.redmine_service import redmine_service
+from datetime import datetime, timedelta, date, time
 from collections import defaultdict
 import json
 import logging
@@ -74,8 +78,8 @@ class TimeCalculator:
 
     def __init__(self, expected_hours_per_day: int = 9, wfo_days_per_week: int = 5,
                  hybrid_days_per_week: int = 3, threshold_red: int = 60,
-                 threshold_amber: int = 90, compliance_hours: int = 9,
-                 mid_compliance_hours: int = 7, non_compliance_hours: int = 6):
+                 threshold_amber: int = 90, compliance_hours: float = 9.0,
+                 mid_compliance_hours: float = 7.0, non_compliance_hours: float = 6.0):
         self.expected_hours_per_day = expected_hours_per_day
         self.wfo_days_per_week = wfo_days_per_week
         self.hybrid_days_per_week = hybrid_days_per_week
@@ -99,34 +103,61 @@ class TimeCalculator:
     # ──────────────────────────────────────────────
 
     def compute_daily_compliance_status(self, total_minutes: int, is_present: bool,
-                                         is_wfh: bool = False) -> str:
+                                         is_wfh: bool = False, date: str = None, 
+                                         employee_email: str = None, db: Session = None) -> str:
         """
-        Core Rule Engine — Daily compliance status.
+        Optimized Rule Engine — Daily compliance status with holiday and leave checking.
 
+        Execution Order:
+        1. Check biometric data first - if IN/OUT entries exist, calculate normally
+        2. If no biometric data, check if date is a holiday
+        3. If not holiday, check if employee is on leave in Redmine
+        
         Rules:
-          - WFH employees → always "Compliance"
-          - If absent → "Non-Compliance"
+          - WFH employees → always "Compliance" (if present)
+          - If absent and no biometric data:
+              - If holiday → "Leave"
+              - If on leave → "Leave"
+              - Else → "Non-Compliance"
           - If present:
               - daily_hours >= compliance_hours → "Compliance"
               - daily_hours >= mid_compliance_hours → "Mid-Compliance"
               - Else → "Non-Compliance"
 
-        Returns: "Compliance", "Mid-Compliance", or "Non-Compliance"
+        Returns: "Compliance", "Mid-Compliance", "Non-Compliance", or "Leave"
         """
-        if is_wfh:
-            return "Compliance"
-
-        if not is_present:
-            return "Non-Compliance"
-
-        daily_hours = total_minutes / 60.0
-
-        if daily_hours >= self.compliance_hours:
-            return "Compliance"
-        elif daily_hours >= self.mid_compliance_hours:
-            return "Mid-Compliance"
-        else:
-            return "Non-Compliance"
+        # Step 1: If present with biometric data, calculate normally
+        if is_present and total_minutes > 0:
+            if is_wfh:
+                return "Compliance"
+            
+            daily_hours = total_minutes / 60.0
+            if daily_hours >= self.compliance_hours:
+                return "Compliance"
+            elif daily_hours >= self.mid_compliance_hours:
+                return "Mid-Compliance"
+            else:
+                return "Non-Compliance"
+        
+        # Step 2: No biometric data, check if it's a holiday
+        if date and db:
+            try:
+                holiday = db.query(Holiday).filter(Holiday.date == datetime.strptime(date, '%Y-%m-%d').date()).first()
+                if holiday:
+                    return "Leave"
+            except ValueError:
+                pass  # Invalid date format, continue to next check
+        
+        # Step 3: Check if employee is on leave in Redmine
+        if date and employee_email:
+            try:
+                if redmine_service.is_employee_on_leave(employee_email, date):
+                    return "Leave"
+            except Exception:
+                pass  # Error checking leave, continue to default
+        
+        # Default: Non-Compliance
+        return "Non-Compliance"
 
     # ──────────────────────────────────────────────
     # AGGREGATION HELPERS
@@ -136,14 +167,23 @@ class TimeCalculator:
     def aggregate_compliance_statuses(daily_statuses: List[str]) -> str:
         """
         Pure aggregation of a list of compliance status strings.
+        Leave days are excluded from compliance calculations.
+        
         Used internally by the weekly/monthly functions below.
         """
         if not daily_statuses:
             return "Non-Compliance"
+        
+        # Filter out leave days for compliance calculation
+        working_days_statuses = [status for status in daily_statuses if status != "Leave"]
+        
+        if not working_days_statuses:
+            # All days are leave, return Compliance by default
+            return "Compliance"
 
-        if "Non-Compliance" in daily_statuses:
+        if "Non-Compliance" in working_days_statuses:
             return "Non-Compliance"
-        elif "Mid-Compliance" in daily_statuses:
+        elif "Mid-Compliance" in working_days_statuses:
             return "Mid-Compliance"
         else:
             return "Compliance"
@@ -151,7 +191,6 @@ class TimeCalculator:
     # ──────────────────────────────────────────────
     # WEEKLY COMPLIANCE — Single shared function
     # ──────────────────────────────────────────────
-
     @staticmethod
     def calculate_weekly_compliance(
         daily_statuses: List[str],
@@ -159,64 +198,56 @@ class TimeCalculator:
         required_days: int,
         is_wfh: bool = False
     ) -> str:
-        """
-        Weekly Compliance Logic
-
-        Rules:
-        1. WFH → Always Compliance
-        2. If present_days < required_days → Non-Compliance
-        3. If compliant_days >= required_days → Compliance
-        4. If some compliance but not enough → Mid-Compliance
-        5. Else → Non-Compliance
-        """
 
         # Step 1: WFH always compliant
         if is_wfh:
             return "Compliance"
 
-        # Step 2: Not enough office days
-        if present_days < required_days:
-            return "Non-Compliance"
+        # Step 2: If the entire week is Leave / Official Leave
+        if all(s in ["Leave", "Official Leave"] for s in daily_statuses):
+            return "Leave"
 
-        # Step 3: Count compliant & mid-compliant days
-        compliant_days = daily_statuses.count("Compliance")
-        mid_days = daily_statuses.count("Mid-Compliance")
+        # Step 3: Remove non-working days
+        valid_statuses = [
+            s for s in daily_statuses
+            if s not in ["Leave", "Official Leave", "Holiday", "Weekend"]
+        ]
 
-        # Step 4: Enough fully compliant days
-        if compliant_days >= required_days:
+        if not valid_statuses:
             return "Compliance"
 
-        # Step 5: Partial compliance
-        if compliant_days + mid_days >= required_days:
-            return "Mid-Compliance"
+        # Step 4: If any Non-Compliance
+        if "Non-Compliance" in valid_statuses:
+            return "Non-Compliance"
 
-        # Step 6: Otherwise fail
-        return "Non-Compliance"
+        # Step 5: If all Compliance
+        if all(s == "Compliance" for s in valid_statuses):
+            return "Compliance"
+
+        # Step 6: Otherwise Mid
+        return "Mid-Compliance"
+        
     # ──────────────────────────────────────────────
     # MONTHLY COMPLIANCE — Aggregated from weekly
     # ──────────────────────────────────────────────
 
     @staticmethod
     def calculate_monthly_compliance(weekly_statuses: List[str]) -> str:
-        """
-        THE single shared function for monthly compliance.
-        Monthly status depends ONLY on weekly statuses.
-        NOT on daily hours, monthly hours, or percentages.
 
-        Rules:
-          - If ANY week = "Non-Compliance" → "Non-Compliance"
-          - Else if ANY week = "Mid-Compliance" → "Mid-Compliance"
-          - Else → "Compliance"
-        """
         if not weekly_statuses:
             return "Non-Compliance"
 
+        # If all weeks are Leave
+        if all(s == "Leave" for s in weekly_statuses):
+            return "Leave"
+
         if "Non-Compliance" in weekly_statuses:
             return "Non-Compliance"
-        elif "Mid-Compliance" in weekly_statuses:
+
+        if "Mid-Compliance" in weekly_statuses:
             return "Mid-Compliance"
-        else:
-            return "Compliance"
+
+        return "Compliance"
 
     # ──────────────────────────────────────────────
     # DAILY SUMMARY CALCULATION
