@@ -144,7 +144,7 @@ export default function Header({ title, onMenuClick }) {
                                             onClick={() => handleRoleSwitch('employee')}
                                         >
                                             <User size={16} />
-                                            <span>Employee View</span>
+                                            <span>Employee</span>
                                         </button>
                                         
                                         {isAdmin && (
@@ -153,7 +153,7 @@ export default function Header({ title, onMenuClick }) {
                                                 onClick={() => handleRoleSwitch('admin')}
                                             >
                                                 <User size={16} />
-                                                <span>Admin View</span>
+                                                <span>Admin</span>
                                             </button>
                                         )}
                                     </div>
