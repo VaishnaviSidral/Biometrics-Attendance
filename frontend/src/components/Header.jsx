@@ -1,16 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, Search, Sun, Moon, LogOut, User } from 'lucide-react';
+import { Menu, Search, Sun, Moon, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Header({ title, onMenuClick }) {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, logout, isAdmin } = useAuth();
+    const { user, logout, isAdmin, isEmployee } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [theme, setTheme] = useState(() => {
         return localStorage.getItem('theme') || 'dark';
     });
+    const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+    const dropdownRef = useRef(null);
 
     // Hide header search on pages that have their own search or employee dashboard
     const hideSearch = location.pathname === '/employees' || location.pathname === '/employee-dashboard';
@@ -34,6 +36,32 @@ export default function Header({ title, onMenuClick }) {
         logout();
         navigate('/login');
     };
+
+    const handleRoleSwitch = (role) => {
+        setShowRoleDropdown(false);
+        
+        // Navigate based on role selection
+        if (role === 'admin' && isAdmin) {
+            navigate('/'); // Admin dashboard
+        } else {
+            navigate('/employee-dashboard'); // Employee dashboard
+        }
+    };
+
+    // Determine current display role
+    const currentRole = isAdmin && !location.pathname.startsWith('/employee') ? 'admin' : 'employee';
+    
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setShowRoleDropdown(false);
+            }
+        };
+        
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Display name: use name if available, fallback to email
     const displayName = user?.name || user?.email || 'User';
@@ -91,13 +119,46 @@ export default function Header({ title, onMenuClick }) {
                     {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
 
-                {/* User info and logout */}
+                {/* User info and role dropdown */}
                 {user && (
                     <>
                         <div className="header-user-info">
                             <User size={18} />
                             <span>{displayName}</span>
-                            <span className="user-role-badge">{user.role}</span>
+                            
+                            {/* Role Dropdown */}
+                            <div className="role-dropdown-container" ref={dropdownRef}>
+                                <button
+                                    className="role-dropdown-trigger"
+                                    onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                                    title="Switch role view"
+                                >
+                                    <span className="current-role">{currentRole === 'admin' ? 'Admin' : 'Employee'}</span>
+                                    <ChevronDown size={16} className={`dropdown-arrow ${showRoleDropdown ? 'open' : ''}`} />
+                                </button>
+                                
+                                {showRoleDropdown && (
+                                    <div className="role-dropdown-menu">
+                                        <button
+                                            className={`role-option ${currentRole === 'employee' ? 'active' : ''}`}
+                                            onClick={() => handleRoleSwitch('employee')}
+                                        >
+                                            <User size={16} />
+                                            <span>Employee View</span>
+                                        </button>
+                                        
+                                        {isAdmin && (
+                                            <button
+                                                className={`role-option ${currentRole === 'admin' ? 'active' : ''}`}
+                                                onClick={() => handleRoleSwitch('admin')}
+                                            >
+                                                <User size={16} />
+                                                <span>Admin View</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <button
