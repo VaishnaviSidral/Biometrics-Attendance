@@ -1466,6 +1466,90 @@ td {
 }
 
 /* ============================================
+   Role Dropdown
+   ============================================ */
+
+.role-dropdown-container {
+  position: relative;
+  margin-left: var(--spacing-2);
+}
+
+.role-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.role-dropdown-trigger:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.current-role {
+  text-transform: capitalize;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s ease;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.role-dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-2));
+  right: 0;
+  min-width: 160px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.role-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.role-option:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.role-option.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.role-option.active:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+/* ============================================
    No Sidebar Layout (for Employee view)
    ============================================ */
 
