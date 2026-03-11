@@ -49,8 +49,10 @@ export default function Header({ title, onMenuClick }) {
     };
 
     // Determine current display role
-    const currentRole = isAdmin && !location.pathname.startsWith('/employee') ? 'admin' : 'employee';
+    const isEmployeeView =
+    location.pathname === '/employee-dashboard';
     
+    const currentRole = isAdmin && !isEmployeeView ? 'admin' : 'employee';
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
