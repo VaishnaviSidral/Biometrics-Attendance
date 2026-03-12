@@ -111,7 +111,9 @@ export default function EmployeeDashboard() {
         const colors = {
             'Compliance':      { bg: '#dcfce7', text: '#16a34a', border: '#bbf7d0' },
             'Mid-Compliance':  { bg: '#fef9c3', text: '#ca8a04', border: '#fde68a' },
-            'Non-Compliance':  { bg: '#fecaca', text: '#dc2626', border: '#fca5a5' }
+            'Non-Compliance':  { bg: '#fecaca', text: '#dc2626', border: '#fca5a5' },
+            'Leave':           { bg: 'rgba(107, 114, 128, 0.125)', text: '#6b7280', border: 'rgba(107, 114, 128, 0.3)' },
+            'Weekend':         { bg: 'rgba(107, 114, 128, 0.125)', text: '#6b7280', border: 'rgba(107, 114, 128, 0.3)' }
         };
         return colors[status] || colors['Non-Compliance'];
     };
@@ -306,7 +308,7 @@ export default function EmployeeDashboard() {
                             <th>FIRST IN</th>
                             <th>LAST OUT</th>
                             <th>TOTAL HOURS</th>
-                            {/* <th>STATUS</th> */}
+                            <th>STATUS</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -340,27 +342,30 @@ export default function EmployeeDashboard() {
                                                 {record.total_hours}
                                             </span>
                                         </td>
-                                        {/* <td>
-                                            {isWeekend ? (
-                                                <span style={{
-                                                    padding: '2px 8px', borderRadius: '999px',
-                                                    fontSize: '12px', fontWeight: 600,
-                                                    background: '#f1f5f9', color: '#64748b'
-                                                }}>Weekend</span>
-                                            ) : record.is_present ? (
-                                                <span style={{
-                                                    padding: '2px 8px', borderRadius: '999px',
-                                                    fontSize: '12px', fontWeight: 600,
-                                                    background: '#dcfce7', color: '#16a34a'
-                                                }}>Present</span>
-                                            ) : (
-                                                <span style={{
-                                                    padding: '2px 8px', borderRadius: '999px',
-                                                    fontSize: '12px', fontWeight: 600,
-                                                    background: '#fecaca', color: '#dc2626'
-                                                }}>Absent</span>
-                                            )}
-                                        </td> */}
+                                        <td>
+                                            {(() => {
+                                                const status = !record.is_weekday
+                                                    ? 'Weekend'
+                                                    : (record.compliance_status === 'LEAVE' ? 'Leave' : record.compliance_status);
+
+                                                const color = getStatusColor(status);
+
+                                                return (
+                                                    <span
+                                                        style={{
+                                                            padding: '4px 10px',
+                                                            borderRadius: '999px',
+                                                            fontSize: '12px',
+                                                            fontWeight: 600,
+                                                            background: color.bg,
+                                                            color: color.text
+                                                        }}
+                                                    >
+                                                        {status}
+                                                    </span>
+                                                );
+                                            })()}
+                                        </td>
                                     </tr>
                                 );
                             })

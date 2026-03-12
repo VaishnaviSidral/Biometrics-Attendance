@@ -224,6 +224,24 @@ async def get_employee_weekly_compliance(
 
     sel_sunday = sel_monday + timedelta(days=6)
 
+    # Preload holidays and leaves for the week period
+    from services.redmine_service import redmine_service
+    try:
+        leave_days = redmine_service.get_leave_days_for_period(
+            employee.email, sel_monday.isoformat(), sel_sunday.isoformat()
+        )
+        leave_days_set = set(d.isoformat() if isinstance(d, date) else str(d) for d in leave_days)
+    except Exception:
+        leave_days_set = set()
+
+    # Load holidays for the period
+    from models.holidays import Holiday
+    holidays = db.query(Holiday.date).filter(
+        Holiday.date >= sel_monday,
+        Holiday.date <= sel_sunday
+    ).all()
+    holidays_set = set(h.date.isoformat() if isinstance(h.date, date) else str(h.date) for h in holidays)
+
     # --- Selected week's daily breakdown ---
     daily_records = db.query(DailyAttendance).filter(
         and_(
@@ -242,6 +260,12 @@ async def get_employee_weekly_compliance(
     current = sel_monday
     while current <= sel_sunday:
         record = daily_map.get(current)
+        current_date_str = current.isoformat()
+        
+        # Check if current date is a leave day or holiday
+        is_leave = current_date_str in leave_days_set
+        is_holiday = current_date_str in holidays_set
+        
         if record:
             minutes = record.total_office_minutes or 0
             is_present = minutes > 0 or record.first_in is not None
@@ -249,14 +273,20 @@ async def get_employee_weekly_compliance(
             if record.compliance_status and current.weekday() < 5:
                 day_compliance_status = record.compliance_status.value
             elif current.weekday() < 5:
-                day_compliance_status = calculator.compute_daily_compliance_status(
-                    minutes, is_present, is_wfh, current.isoformat(), employee.email, db
-                )
+                # If it's a leave or holiday, override with Leave status
+                if is_holiday:
+                    day_compliance_status = None
+                elif is_leave:
+                    day_compliance_status = 'Leave'
+                else:
+                    day_compliance_status = calculator.compute_daily_compliance_status(
+                        minutes, is_present, is_wfh, current_date_str, employee.email, db
+                    )
             else:
                 day_compliance_status = None
 
             daily_data.append({
-                'date': current.isoformat(),
+                'date': current_date_str,
                 'day': current.strftime('%A'),
                 'first_in': record.first_in.strftime('%I:%M %p') if record.first_in else '-',
                 'last_out': record.last_out.strftime('%I:%M %p') if record.last_out else '-',
@@ -264,7 +294,7 @@ async def get_employee_weekly_compliance(
                 'total_minutes': minutes,
                 'is_present': is_present,
                 'is_weekday': current.weekday() < 5,
-                'compliance_status': day_compliance_status
+                'compliance_status': 'Holiday' if is_holiday else day_compliance_status
             })
 
             if current.weekday() < 5:
@@ -274,8 +304,28 @@ async def get_employee_weekly_compliance(
                     week_present_days += 1
         else:
             is_weekday = current.weekday() < 5
+            current_date_str = current.isoformat()
+            
+            # Check if current date is a leave day or holiday
+            is_leave = current_date_str in leave_days_set
+            is_holiday = current_date_str in holidays_set
+            
+            if is_weekday:
+                if is_holiday:
+                    day_compliance_status = None
+                elif is_leave:
+                    day_compliance_status = 'Leave'
+                elif is_wfh:
+                    day_compliance_status = 'Compliance'
+                else:
+                    day_compliance_status = calculator.compute_daily_compliance_status(
+                        0, False, False, current_date_str, employee.email, db
+                    )
+            else:
+                day_compliance_status = None
+
             daily_data.append({
-                'date': current.isoformat(),
+                'date': current_date_str,
                 'day': current.strftime('%A'),
                 'first_in': '-',
                 'last_out': '-',
@@ -283,16 +333,11 @@ async def get_employee_weekly_compliance(
                 'total_minutes': 0,
                 'is_present': False,
                 'is_weekday': is_weekday,
-                'compliance_status': 'Non-Compliance' if is_weekday and not is_wfh else (
-                    'Compliance' if is_weekday and is_wfh else None
-                )
+                'compliance_status': 'Holiday' if is_holiday else day_compliance_status
             })
 
             if is_weekday:
-                if is_wfh:
-                    week_daily_statuses.append('Compliance')
-                else:
-                    week_daily_statuses.append('Non-Compliance')
+                week_daily_statuses.append(day_compliance_status or 'Non-Compliance')
 
         current += timedelta(days=1)
 
@@ -357,7 +402,10 @@ async def get_employee_weekly_compliance(
                             )
                             s_daily_statuses.append(cs)
                     else:
-                        s_daily_statuses.append('Non-Compliance')
+                        cs = calculator.compute_daily_compliance_status(
+                            0, False, False, s_current.isoformat(), employee.email, db
+                        )
+                        s_daily_statuses.append(cs)
                 s_current += timedelta(days=1)
 
             s_status = TimeCalculator.calculate_weekly_compliance(

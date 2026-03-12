@@ -116,7 +116,7 @@ class TimeCalculator:
         Rules:
           - WFH employees → always "Compliance" (if present)
           - If absent and no biometric data:
-              - If holiday → "Leave"
+              - If holiday → "Holiday"
               - If on leave → "Leave"
               - Else → "Non-Compliance"
           - If present:
@@ -144,7 +144,7 @@ class TimeCalculator:
             try:
                 holiday = db.query(Holiday).filter(Holiday.date == datetime.strptime(date, '%Y-%m-%d').date()).first()
                 if holiday:
-                    return "Leave"
+                    return "Non-Compliance"
             except ValueError:
                 pass  # Invalid date format, continue to next check
         
