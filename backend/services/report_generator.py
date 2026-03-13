@@ -156,7 +156,7 @@ class ReportGenerator:
                 return "Non-Compliance"
 
         if self._is_holiday_cached(date_str):
-            return "Leave"
+            return "Holiday"
 
         if self._is_on_leave_cached(employee_email, date_str):
             return "Leave"
@@ -376,7 +376,7 @@ class ReportGenerator:
             self._batch_preload_leaves(leave_emails, week_start, week_end)
 
             total_compliance = 0
-            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0}
+            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0, 'Holiday': 0}
             total_wfo_days = 0
             valid_count = 0
 
@@ -402,7 +402,7 @@ class ReportGenerator:
             week_start = None
             week_end = None
             avg_compliance = 0
-            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0}
+            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0, 'Holiday': 0}
             total_wfo_days = 0
 
         return {
@@ -539,7 +539,7 @@ class ReportGenerator:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> Dict:
-        """Generate detailed report for a single employee"""
+
         employee = self.db.query(Employee).filter(
             Employee.code == employee_code
         ).first()
@@ -557,15 +557,16 @@ class ReportGenerator:
 
         if start_date:
             query = query.filter(DailyAttendance.date >= start_date)
+
         if end_date:
             query = query.filter(DailyAttendance.date <= end_date)
 
         daily_records = query.order_by(DailyAttendance.date.desc()).all()
-        
-        # Filter weekly summaries by date range too
+
         weekly_query = self.db.query(WeeklySummary).filter(
             WeeklySummary.employee_code == employee_code
         )
+
         if start_date and end_date:
             weekly_query = weekly_query.filter(
                 WeeklySummary.week_start <= end_date,
@@ -578,36 +579,60 @@ class ReportGenerator:
 
         expected_daily_minutes = mode_config['hours_per_day'] * 60
 
-        # Calculate days as floor(total_minutes / expected_daily_minutes)
         if expected_daily_minutes > 0:
             total_wfo_days = total_office_minutes // expected_daily_minutes
         else:
             total_wfo_days = 0
 
-        # Format daily records with compliance_status from DB
+        # Preload holidays & leaves
+        if start_date and end_date:
+            self._preload_holidays(start_date, end_date)
+
+            if employee.email:
+                self._preload_leaves(employee.email, start_date, end_date)
+
         daily_data = []
-        all_daily_statuses = []  # collect for overall compliance aggregation
+        all_daily_statuses = []
+
         for record in daily_records:
+
             pairs = json.loads(record.in_out_pairs) if record.in_out_pairs else []
 
-            # Daily compliance percentage (for display only)
             if expected_daily_minutes > 0:
-                daily_compliance = min((record.total_office_minutes / expected_daily_minutes) * 100, 100.0)
+                daily_compliance = min(
+                    (record.total_office_minutes / expected_daily_minutes) * 100,
+                    100.0
+                )
             else:
                 daily_compliance = 100.0 if is_wfh else 0
 
-            # Use stored compliance_status (single source of truth)
-            if record.compliance_status:
+            current_date_str = record.date.isoformat()
+
+            # Correct holiday check
+            is_holiday = self._holidays_cache.get(current_date_str, False)
+            is_leave = current_date_str in getattr(self, "leaves_set", set())
+
+            worked_today = record.total_office_minutes > 0 or record.first_in is not None
+
+            if is_holiday and not worked_today:
+                daily_status_color = "Holiday"
+
+            elif is_leave:
+                daily_status_color = "Leave"
+
+            elif record.compliance_status:
                 daily_status_color = record.compliance_status.value
+
             else:
-                # Fallback for records without compliance_status
-                is_present = record.total_office_minutes > 0 or record.first_in is not None
                 daily_status_color = self._get_daily_compliance_status(
-                    record.total_office_minutes, is_present, is_wfh, 
-                    record.date.isoformat(), employee.email, self.db
+                    record.total_office_minutes,
+                    worked_today,
+                    is_wfh,
+                    current_date_str,
+                    employee.email,
+                    self.db
                 )
 
-            # Collect weekday statuses for overall aggregation
             if record.date.weekday() < 5:
                 all_daily_statuses.append(daily_status_color)
 
@@ -624,24 +649,40 @@ class ReportGenerator:
                 'daily_status_color': daily_status_color
             })
 
+        # Weekly Data
+
         if weekly_summaries:
             ws_start = min(s.week_start for s in weekly_summaries)
             ws_end = max(s.week_end for s in weekly_summaries)
-            weekly_daily = self._batch_load_daily_attendance(ws_start, ws_end, [employee_code])
+
+            weekly_daily = self._batch_load_daily_attendance(
+                ws_start, ws_end, [employee_code]
+            )
+
             self._preload_holidays(ws_start, ws_end)
+
             if employee.email:
                 self._preload_leaves(employee.email, ws_start, ws_end)
+
             emp_weekly_daily_map = weekly_daily.get(employee_code, {})
+
         else:
             emp_weekly_daily_map = {}
 
         weekly_data = []
         weekly_statuses_for_overall = []
+
         for summary in weekly_summaries:
+
             result = self._compute_weekly_compliance_fast(
-                employee_code, summary.week_start, summary.week_end, work_mode,
-                emp_weekly_daily_map, employee.email
+                employee_code,
+                summary.week_start,
+                summary.week_end,
+                work_mode,
+                emp_weekly_daily_map,
+                employee.email
             )
+
             weekly_statuses_for_overall.append(result['status'])
 
             weekly_data.append({
@@ -656,28 +697,44 @@ class ReportGenerator:
                 'status': result['status']
             })
 
+        # Overall Compliance
+
         if is_wfh:
             overall_status = 'Compliance'
             avg_compliance = 100.0
+
         else:
-            overall_status = TimeCalculator.calculate_monthly_compliance(weekly_statuses_for_overall)
-            # Count total weekdays in selected range
+
+            overall_status = TimeCalculator.calculate_monthly_compliance(
+                weekly_statuses_for_overall
+            )
+
             if start_date and end_date:
-                total_weekdays = sum(
+
+                total_working_days = sum(
                     1
                     for i in range((end_date - start_date).days + 1)
-                    if (start_date + timedelta(days=i)).weekday() < 5
-                )
-            else:
-                total_weekdays = sum(
-                    1 for d in daily_records
-                    if d.date.weekday() < 5
+                    if (
+                        (start_date + timedelta(days=i)).weekday() < 5 and
+                        (start_date + timedelta(days=i)).isoformat()
+                        not in self._holidays_cache and
+                        (start_date + timedelta(days=i)).isoformat()
+                        not in getattr(self, "leaves_set", set())
+                    )
                 )
 
-            expected_period_minutes = total_weekdays * expected_daily_minutes if expected_daily_minutes > 0 else 0
+            else:
+
+                total_working_days = sum(
+                    1 for d in daily_records if d.date.weekday() < 5
+                )
+
+            expected_period_minutes = total_working_days * expected_daily_minutes
 
             if expected_period_minutes > 0:
-                avg_compliance = (total_office_minutes / expected_period_minutes) * 100
+                avg_compliance = (
+                    total_office_minutes / expected_period_minutes
+                ) * 100
             else:
                 avg_compliance = 0.0
 
@@ -698,7 +755,6 @@ class ReportGenerator:
             'daily_records': daily_data,
             'weekly_summaries': weekly_data
         }
-
     def get_wfo_compliance_report(
         self,
         week_start: Optional[date] = None

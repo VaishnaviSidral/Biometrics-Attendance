@@ -41,8 +41,11 @@ function Layout() {
 
   // Show sidebar only when user is in admin view (not just has admin role)
   // Hide sidebar for all employee-specific routes including /employee-dashboard and /employee/
-  const showSidebar = isAuthenticated && isAdmin && !location.pathname.startsWith('/employee');
-
+  
+  const isEmployeeView =
+    location.pathname === '/employee-dashboard';
+    
+  const showSidebar = isAuthenticated && isAdmin && !isEmployeeView;
   return (
     <div className="app-container">
       {showSidebar && <Sidebar />}

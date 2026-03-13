@@ -49,8 +49,10 @@ export default function Header({ title, onMenuClick }) {
     };
 
     // Determine current display role
-    const currentRole = isAdmin && !location.pathname.startsWith('/employee') ? 'admin' : 'employee';
+    const isEmployeeView =
+    location.pathname === '/employee-dashboard';
     
+    const currentRole = isAdmin && !isEmployeeView ? 'admin' : 'employee';
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -144,7 +146,7 @@ export default function Header({ title, onMenuClick }) {
                                             onClick={() => handleRoleSwitch('employee')}
                                         >
                                             <User size={16} />
-                                            <span>Employee View</span>
+                                            <span>Employee</span>
                                         </button>
                                         
                                         {isAdmin && (
@@ -153,7 +155,7 @@ export default function Header({ title, onMenuClick }) {
                                                 onClick={() => handleRoleSwitch('admin')}
                                             >
                                                 <User size={16} />
-                                                <span>Admin View</span>
+                                                <span>Admin</span>
                                             </button>
                                         )}
                                     </div>
