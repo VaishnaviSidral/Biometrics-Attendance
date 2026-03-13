@@ -9,6 +9,8 @@ export default function StatusBadge({ status }) {
         "Compliance":      { label: "Compliance",      color: "#16a34a" },
         "Mid-Compliance":  { label: "Mid-Compliance",  color: "#f59e0b" },
         "Non-Compliance":  { label: "Non-Compliance",  color: "#dc2626" },
+        "Holiday":         { label: "Holiday", color: "#7c3aed" },
+        "Leave":           { label: "Leave",           color: "#6b7280" },
     };
 
     const config = statusMap[status] || {
@@ -42,6 +44,8 @@ export function statusToCssClass(status) {
         "Compliance":     "green",
         "Mid-Compliance": "amber",
         "Non-Compliance": "red",
+        "Holiday":        "muted",
+        "Leave":          "muted",
     };
     return map[status] || "red";
 }

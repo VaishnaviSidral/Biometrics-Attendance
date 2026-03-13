@@ -112,8 +112,9 @@ export default function EmployeeDashboard() {
             'Compliance':      { bg: '#dcfce7', text: '#16a34a', border: '#bbf7d0' },
             'Mid-Compliance':  { bg: '#fef9c3', text: '#ca8a04', border: '#fde68a' },
             'Non-Compliance':  { bg: '#fecaca', text: '#dc2626', border: '#fca5a5' },
-            'Leave':           { bg: 'rgba(107, 114, 128, 0.125)', text: '#6b7280', border: 'rgba(107, 114, 128, 0.3)' },
-            'Weekend':         { bg: 'rgba(107, 114, 128, 0.125)', text: '#6b7280', border: 'rgba(107, 114, 128, 0.3)' }
+            'Holiday':         { bg: '#f3e8ff', text: '#7c3aed', border: '#e9d5ff' },
+            'Leave':           { bg: '#f3f4f6', text: '#6b7280', border: '#d1d5db' },
+            'Weekend':         { bg: '#f3f4f6', text: '#6b7280', border: '#d1d5db' },
         };
         return colors[status] || colors['Non-Compliance'];
     };

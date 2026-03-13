@@ -144,7 +144,7 @@ class TimeCalculator:
             try:
                 holiday = db.query(Holiday).filter(Holiday.date == datetime.strptime(date, '%Y-%m-%d').date()).first()
                 if holiday:
-                    return "Non-Compliance"
+                    return "Holiday"
             except ValueError:
                 pass  # Invalid date format, continue to next check
         

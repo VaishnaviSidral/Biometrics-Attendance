@@ -294,7 +294,7 @@ async def get_employee_weekly_compliance(
                 'total_minutes': minutes,
                 'is_present': is_present,
                 'is_weekday': current.weekday() < 5,
-                'compliance_status': 'Holiday' if is_holiday else day_compliance_status
+                'compliance_status': 'Holiday' if (is_holiday and not is_present) else day_compliance_status
             })
 
             if current.weekday() < 5:
@@ -333,7 +333,7 @@ async def get_employee_weekly_compliance(
                 'total_minutes': 0,
                 'is_present': False,
                 'is_weekday': is_weekday,
-                'compliance_status': 'Holiday' if is_holiday else day_compliance_status
+                'compliance_status': 'Holiday' if (is_holiday and not is_leave) else day_compliance_status
             })
 
             if is_weekday:

@@ -156,7 +156,7 @@ class ReportGenerator:
                 return "Non-Compliance"
 
         if self._is_holiday_cached(date_str):
-            return "Leave"
+            return "Holiday"
 
         if self._is_on_leave_cached(employee_email, date_str):
             return "Leave"
@@ -376,7 +376,7 @@ class ReportGenerator:
             self._batch_preload_leaves(leave_emails, week_start, week_end)
 
             total_compliance = 0
-            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0}
+            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0, 'Holiday': 0}
             total_wfo_days = 0
             valid_count = 0
 
@@ -402,7 +402,7 @@ class ReportGenerator:
             week_start = None
             week_end = None
             avg_compliance = 0
-            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0}
+            status_counts = {'Non-Compliance': 0, 'Mid-Compliance': 0, 'Compliance': 0, 'Leave': 0, 'Holiday': 0}
             total_wfo_days = 0
 
         return {
@@ -563,7 +563,6 @@ class ReportGenerator:
 
         daily_records = query.order_by(DailyAttendance.date.desc()).all()
 
-        # Weekly summaries
         weekly_query = self.db.query(WeeklySummary).filter(
             WeeklySummary.employee_code == employee_code
         )
@@ -585,7 +584,7 @@ class ReportGenerator:
         else:
             total_wfo_days = 0
 
-        # 🔹 Preload holidays & leaves (performance safe)
+        # Preload holidays & leaves
         if start_date and end_date:
             self._preload_holidays(start_date, end_date)
 
@@ -609,11 +608,13 @@ class ReportGenerator:
 
             current_date_str = record.date.isoformat()
 
-            is_holiday = current_date_str in getattr(self, "holidays_set", set())
+            # Correct holiday check
+            is_holiday = self._holidays_cache.get(current_date_str, False)
             is_leave = current_date_str in getattr(self, "leaves_set", set())
 
-            # 🔹 Holiday priority fix
-            if is_holiday:
+            worked_today = record.total_office_minutes > 0 or record.first_in is not None
+
+            if is_holiday and not worked_today:
                 daily_status_color = "Holiday"
 
             elif is_leave:
@@ -623,11 +624,9 @@ class ReportGenerator:
                 daily_status_color = record.compliance_status.value
 
             else:
-                is_present = record.total_office_minutes > 0 or record.first_in is not None
-
                 daily_status_color = self._get_daily_compliance_status(
                     record.total_office_minutes,
-                    is_present,
+                    worked_today,
                     is_wfh,
                     current_date_str,
                     employee.email,
@@ -650,7 +649,7 @@ class ReportGenerator:
                 'daily_status_color': daily_status_color
             })
 
-        # ---------------- Weekly Data ----------------
+        # Weekly Data
 
         if weekly_summaries:
             ws_start = min(s.week_start for s in weekly_summaries)
@@ -698,7 +697,7 @@ class ReportGenerator:
                 'status': result['status']
             })
 
-        # ---------------- Overall Compliance ----------------
+        # Overall Compliance
 
         if is_wfh:
             overall_status = 'Compliance'
@@ -710,7 +709,6 @@ class ReportGenerator:
                 weekly_statuses_for_overall
             )
 
-            # 🔹 Correct expected working days calculation
             if start_date and end_date:
 
                 total_working_days = sum(
@@ -719,7 +717,7 @@ class ReportGenerator:
                     if (
                         (start_date + timedelta(days=i)).weekday() < 5 and
                         (start_date + timedelta(days=i)).isoformat()
-                        not in getattr(self, "holidays_set", set()) and
+                        not in self._holidays_cache and
                         (start_date + timedelta(days=i)).isoformat()
                         not in getattr(self, "leaves_set", set())
                     )
@@ -757,8 +755,6 @@ class ReportGenerator:
             'daily_records': daily_data,
             'weekly_summaries': weekly_data
         }
-
-
     def get_wfo_compliance_report(
         self,
         week_start: Optional[date] = None
