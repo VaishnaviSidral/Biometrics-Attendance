@@ -199,15 +199,10 @@ class TimeCalculator:
         is_wfh: bool = False
     ) -> str:
 
-        # Step 1: WFH always compliant
         if is_wfh:
             return "Compliance"
 
-        # Step 2: If the entire week is Leave / Official Leave
-        if all(s in ["Leave", "Official Leave"] for s in daily_statuses):
-            return "Leave"
-
-        # Step 3: Remove non-working days
+        # Remove non-working statuses
         valid_statuses = [
             s for s in daily_statuses
             if s not in ["Leave", "Official Leave", "Holiday", "Weekend"]
@@ -216,16 +211,41 @@ class TimeCalculator:
         if not valid_statuses:
             return "Compliance"
 
-        # Step 4: If any Non-Compliance
-        if "Non-Compliance" in valid_statuses:
+        # When required_days is 0 (e.g. caller omitted it), derive status from all working days
+        # so weekly reflects daily: any Non → Non, any Mid → Mid, else Compliance.
+        if required_days <= 0:
+            return TimeCalculator.aggregate_compliance_statuses(valid_statuses)
+
+        compliance_days = valid_statuses.count("Compliance")
+        mid_days = valid_statuses.count("Mid-Compliance")
+        non_days = valid_statuses.count("Non-Compliance")
+
+        # Build best possible required days
+        considered = []
+
+        # First take compliance days
+        take = min(compliance_days, required_days)
+        considered += ["Compliance"] * take
+        remaining = required_days - take
+
+        # Then take mid days
+        if remaining > 0:
+            take = min(mid_days, remaining)
+            considered += ["Mid-Compliance"] * take
+            remaining -= take
+
+        # Then take non days
+        if remaining > 0:
+            considered += ["Non-Compliance"] * remaining
+
+        # Final weekly status
+        if "Non-Compliance" in considered:
             return "Non-Compliance"
 
-        # Step 5: If all Compliance
-        if all(s == "Compliance" for s in valid_statuses):
-            return "Compliance"
+        if "Mid-Compliance" in considered:
+            return "Mid-Compliance"
 
-        # Step 6: Otherwise Mid
-        return "Mid-Compliance"
+        return "Compliance"
         
     # ──────────────────────────────────────────────
     # MONTHLY COMPLIANCE — Aggregated from weekly

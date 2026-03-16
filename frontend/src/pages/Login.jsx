@@ -128,7 +128,7 @@ function LoginForm() {
                 )}
 
                 {/* Email Login Form */}
-                <form onSubmit={handleEmailLogin} className="login-form">
+                {/* <form onSubmit={handleEmailLogin} className="login-form">
                     <div className="form-group">
                         <label htmlFor="email" className="form-label">
                             Email
@@ -182,7 +182,7 @@ function LoginForm() {
                             <div style={{ flex: 1, height: '1px', background: 'var(--color-border)' }} />
                         </div>
                     </div>
-                </form>
+                </form> */}
                 {/* Google Sign-In */}
                 {googleEnabled && (
                     <div style={{ marginBottom: '20px' }}>
