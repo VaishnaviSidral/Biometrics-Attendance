@@ -299,7 +299,7 @@ async def get_employee_weekly_compliance(
 
             if current.weekday() < 5:
                 if day_compliance_status:
-                    week_daily_statuses.append(day_compliance_status)
+                    week_daily_statuses.append(day_compliance_status or "Non-Compliance")
                 if is_present:
                     week_present_days += 1
         else:

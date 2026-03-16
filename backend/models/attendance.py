@@ -21,6 +21,7 @@ class ComplianceStatus(str, enum.Enum):
     MID_COMPLIANCE = "Mid-Compliance"
     COMPLIANCE = "Compliance"
     LEAVE = "Leave"
+    HOLIDAY = "Holiday"
 
 
 class AttendanceLog(Base):

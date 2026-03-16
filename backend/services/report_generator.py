@@ -265,8 +265,9 @@ class ReportGenerator:
                     daily_statuses.append(cs)
             current += timedelta(days=1)
 
+        required_days = mode_config.get('required_days', 0)
         status = TimeCalculator.calculate_weekly_compliance(
-            daily_statuses, present_days = 0, required_days = 0, is_wfh = is_wfh
+            daily_statuses, present_days, required_days, is_wfh
         )
 
         expected_minutes = mode_config.get('expected_weekly_hours', 0) * 60
@@ -328,8 +329,9 @@ class ReportGenerator:
                     daily_statuses.append(cs)
             current += timedelta(days=1)
 
+        required_days = mode_config.get('required_days', 0)
         status = TimeCalculator.calculate_weekly_compliance(
-            daily_statuses, present_days=0, required_days=0, is_wfh=is_wfh
+            daily_statuses, present_days, required_days, is_wfh
         )
 
         expected_minutes = mode_config.get('expected_weekly_hours', 0) * 60
