@@ -164,15 +164,20 @@ async def export_monthly_report_csv(
     output = io.StringIO()
     writer = csv.writer(output)
 
+    # Updated Headers (Expected vs Actual + Avg %)
     writer.writerow([
         "Emp Code",
         "Emp Name",
         "Work Mode",
-        "Required WFO Days",
-        "Total WFO Days",
-        "Total WFH Days",
+
+        "Expected WFO Days",
+        "Actual WFO Days",
+
+        "Expected WFH Days",
+        "Actual WFH Days",
+
         "Days Below Required Hours",
-        # "Compliance %",
+        "Avg Compliance %",
         "Status"
     ])
 
@@ -181,11 +186,15 @@ async def export_monthly_report_csv(
             row["employee_code"],
             row["employee_name"],
             row["work_mode"],
-            row["required_days"], 
+
+            row["expected_wfo_days"],
             row["total_wfo_days"],
+
+            row["expected_wfh_days"],
             row["total_wfh_days"],
+
             row["days_below_required_hours"],
-            # f'{row["compliance_percentage"]:.2f}%',
+            f'{row["avg_compliance_percentage"]:.2f}%',
             row["compliance_status"]
         ])
 
@@ -198,7 +207,6 @@ async def export_monthly_report_csv(
             "Content-Disposition": f"attachment; filename=monthly_report_{month}.csv"
         }
     )
-
 
 @router.get("/export/all-employees")
 async def export_all_employees_csv(
@@ -226,7 +234,8 @@ async def export_all_employees_csv(
     writer = csv.writer(output)
 
     writer.writerow([
-        'Employee Code', 'Employee Name', 'Work Mode', 'Department',
+        'Employee Code', 'Employee Name', 'Work Mode', 
+        # 'Department',
         'Total Office Hours', 'WFO Days', 'Expected Hours',
         'Compliance %', 'Status'
     ])
@@ -236,7 +245,7 @@ async def export_all_employees_csv(
             emp['employee_code'],
             emp['employee_name'],
             emp['work_mode'],
-            emp['department'] or '',
+            # emp['department'] or '',
             emp['total_office_hours'],
             emp['wfo_days'],
             emp['expected_hours'],

@@ -250,7 +250,7 @@ export default function MonthlyReport({ workMode }) {
                                     const mode = row.work_mode || "WFO";
                                     const modeColors = { WFO: "#3b82f6", HYBRID: "#8b5cf6", WFH: "#06b6d4", CLIENT_OFFICE: "#f59e0b" };
 
-                                    const compliance = row.compliance_percentage || 0;
+                                    const compliance = row.avg_compliance_percentage || 0;
                                     // Use compliance_status from backend (hour-based) for CSS class
                                     const statusClass = statusToCssClass(row.compliance_status);
 
