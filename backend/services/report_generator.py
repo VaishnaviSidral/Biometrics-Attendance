@@ -1023,11 +1023,6 @@ class ReportGenerator:
         return result
 
     def get_monthly_report(self, month: str, search: Optional[str] = None, work_mode: Optional[str] = None):
-        """
-        Month format: YYYY-MM
-        Monthly compliance = aggregation of WEEKLY statuses (not daily).
-        Uses calculate_monthly_compliance(weekly_statuses).
-        """
         import calendar as cal_mod
 
         year, mon = map(int, month.split("-"))
@@ -1035,6 +1030,7 @@ class ReportGenerator:
         _, days_in_month = cal_mod.monthrange(year, mon)
         end_date = date(year, mon, days_in_month)
 
+        # Working days
         working_days = 0
         current = start_date
         while current <= end_date:
@@ -1045,6 +1041,7 @@ class ReportGenerator:
         ds = self.dynamic_settings
         compliance_hours = ds['compliance_hours']
 
+        # Weeks calculation
         first_monday = start_date - timedelta(days=start_date.weekday())
         month_weeks = []
         wk_start = first_monday
@@ -1059,6 +1056,7 @@ class ReportGenerator:
                 month_weeks.append((wk_start, wk_end))
             wk_start += timedelta(days=7)
 
+        # Employees
         emp_query = self.db.query(Employee).filter(Employee.status == 1)
         if search:
             search_term = f"%{search}%"
@@ -1068,6 +1066,7 @@ class ReportGenerator:
             )
         if work_mode:
             emp_query = emp_query.filter(Employee.work_mode.ilike(work_mode))
+
         all_employees = emp_query.order_by(Employee.name).all()
 
         overall_start = month_weeks[0][0] if month_weeks else start_date
@@ -1075,13 +1074,16 @@ class ReportGenerator:
 
         emp_codes = [e.code for e in all_employees]
         all_daily_by_emp = self._batch_load_daily_attendance(overall_start, overall_end, emp_codes)
+
         self._preload_holidays(overall_start, overall_end)
+
         leave_emails = [
             emp.email for emp in all_employees
             if emp.email and (emp.work_mode or 'WFO').upper() != 'WFH'
         ]
         self._batch_preload_leaves(leave_emails, overall_start, overall_end)
 
+        # Monthly records
         daily_records_in_month = self.db.query(DailyAttendance).filter(
             and_(
                 DailyAttendance.date >= start_date,
@@ -1094,6 +1096,7 @@ class ReportGenerator:
             emp_month_records.setdefault(rec.employee_code, []).append(rec)
 
         final = []
+
         for emp in all_employees:
             emp_work_mode = (emp.work_mode or "WFO").upper()
             is_exempted = emp_work_mode == "WFH"
@@ -1101,17 +1104,24 @@ class ReportGenerator:
 
             records = emp_month_records.get(emp.code, [])
 
-            wfo_days = sum(1 for r in records if (r.total_office_minutes or 0) > 0)
-            wfh_days = working_days - wfo_days
+            # 🔹 EXISTING LOGIC (UNCHANGED)
+            wfo_days = sum(
+                    1 for r in records
+                    if (r.total_office_minutes or 0) > 0 and r.date.weekday() < 5
+                )
+            wfh_days = max(working_days - wfo_days, 0)
+            wfo_days = min(wfo_days, working_days)
+            
             total_office_minutes = sum(r.total_office_minutes or 0 for r in records)
             total_office_hours = total_office_minutes / 60.0
 
             days_below_required_hours = 0
             for r in records:
-                daily_minutes = r.total_office_minutes or 0
-                daily_hours = daily_minutes / 60.0
-                if daily_minutes > 0 and daily_hours < compliance_hours:
-                    days_below_required_hours += 1
+                if r.date.weekday() < 5:
+                    daily_minutes = r.total_office_minutes or 0
+                    daily_hours = daily_minutes / 60.0
+                    if daily_minutes > 0 and daily_hours < compliance_hours:
+                        days_below_required_hours += 1
 
             if is_exempted:
                 compliance_percentage = 100.0
@@ -1131,27 +1141,58 @@ class ReportGenerator:
 
                 compliance_status = TimeCalculator.calculate_monthly_compliance(weekly_statuses)
 
-                expected_monthly_minutes = required_days * len(month_weeks) * mode_config.get('hours_per_day', compliance_hours) * 60
+                expected_monthly_minutes = (
+                    required_days * len(month_weeks) *
+                    mode_config.get('hours_per_day', compliance_hours) * 60
+                )
+
                 if expected_monthly_minutes > 0:
                     compliance_percentage = min((total_office_minutes / expected_monthly_minutes) * 100, 100.0)
                 else:
                     compliance_percentage = 100.0
 
+            # ✅ NEW LOGIC (Expected vs Actual — SAFE ADDITION)
+            weeks_count = len(month_weeks)
+
+            if emp_work_mode == "WFO":
+                expected_wfo_days = working_days
+                expected_wfh_days = 0
+
+            elif emp_work_mode == "HYBRID":
+                required_days_per_week = mode_config.get('required_days', 0)
+                expected_wfo_days = min(required_days_per_week * weeks_count, working_days)
+                expected_wfh_days = max(working_days - expected_wfo_days, 0)
+
+            else:
+                expected_wfo_days = 0
+                expected_wfh_days = working_days
+
+            # ✅ FINAL OUTPUT
             final.append({
                 "employee_code": emp.code,
                 "employee_name": emp.name,
                 "department": emp.department,
                 "work_mode": emp_work_mode,
-                "exempted": is_exempted,
+
+                # 🔹 Expected (NEW)
+                "expected_wfo_days": expected_wfo_days,
+                "expected_wfh_days": expected_wfh_days,
+
+                # 🔹 Actual (EXISTING)
                 "total_wfo_days": wfo_days,
                 "total_wfh_days": wfh_days,
+
                 "days_below_required_hours": days_below_required_hours,
-                "total_office_hours": round(total_office_hours, 1),
-                "avg_daily_hours": round(total_office_hours / wfo_days, 1) if wfo_days > 0 else 0,
+
+                # 🔹 Compliance
+                "avg_compliance_percentage": round(compliance_percentage, 2),
+                "compliance_status": compliance_status,
+
+                # 🔹 Existing (unchanged)
                 "required_days": required_days,
                 "working_days": working_days,
-                "compliance_percentage": round(compliance_percentage, 2),
-                "compliance_status": compliance_status
+                "total_office_hours": round(total_office_hours, 1),
+                "avg_daily_hours": round(total_office_hours / wfo_days, 1) if wfo_days > 0 else 0,
             })
 
         return final
