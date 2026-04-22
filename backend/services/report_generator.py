@@ -1197,12 +1197,55 @@ class ReportGenerator:
 
         return final
 
+    def get_monthly_report_export(
+        self,
+        from_month: str,
+        to_month: str,
+        search: Optional[str] = None,
+        work_mode: Optional[str] = None
+    ):
+        """
+        Export monthly report for date range (from_month to to_month).
+        Returns month-wise records for each employee.
+        """
+        import calendar as cal_mod
+        
+        # Parse months
+        from_year, from_mon = map(int, from_month.split("-"))
+        to_year, to_mon = map(int, to_month.split("-"))
+        
+        # Generate list of months in range
+        months_list = []
+        current_year, current_month = from_year, from_mon
+        
+        while (current_year < to_year) or (current_year == to_year and current_month <= to_mon):
+            months_list.append(f"{current_year}-{current_month:02d}")
+            
+            # Move to next month
+            if current_month == 12:
+                current_year += 1
+                current_month = 1
+            else:
+                current_month += 1
+        
+        all_records = []
+        
+        for month_str in months_list:
+            month_records = self.get_monthly_report(month=month_str, search=search, work_mode=work_mode)
+            
+            # Add month column to each record
+            for record in month_records:
+                record_with_month = record.copy()
+                record_with_month["month"] = month_str
+                all_records.append(record_with_month)
+        
+        return all_records
 
     def get_daily_details(
         self,
         date_str: str,
         status_category: str
-    ) -> List[Dict]:
+    ):
         """Get list of employees for specific day and status.
         
         Presence is based on biometric reality (total_office_minutes > 0 OR first_in exists),

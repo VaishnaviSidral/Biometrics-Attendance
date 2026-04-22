@@ -138,13 +138,18 @@ async def get_wfo_compliance_report(
 
 @router.get("/monthly-report")
 async def get_monthly_report(
-    month: str = Query(..., description="Month in YYYY-MM format"),
+    month: str = Query(..., description="Month in YYYY-MM format (single month only)"),
     search: Optional[str] = Query(None, description="Search by employee name or code"),
     work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID, WFH"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin)
 ):
-    """Admin Monthly Report — presence-based, day-based compliance"""
+    """
+    Admin Monthly Report - Table View (Single Month Only)
+    
+    This endpoint always returns data for a single selected month.
+    Use the export-range endpoint for date range exports.
+    """
     generator = ReportGenerator(db)
     return generator.get_monthly_report(month=month, search=search, work_mode=work_mode)
 
@@ -157,7 +162,7 @@ async def export_monthly_report_csv(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin)
 ):
-    """Export monthly report as CSV"""
+    """Export monthly report as CSV (single month)"""
     generator = ReportGenerator(db)
     data = generator.get_monthly_report(month=month, search=search, work_mode=work_mode)
 
@@ -205,6 +210,69 @@ async def export_monthly_report_csv(
         media_type="text/csv",
         headers={
             "Content-Disposition": f"attachment; filename=monthly_report_{month}.csv"
+        }
+    )
+
+
+@router.get("/monthly-report/export-range")
+async def export_monthly_report_range_csv(
+    from_month: str = Query(..., description="From month in YYYY-MM format"),
+    to_month: str = Query(..., description="To month in YYYY-MM format"),
+    search: Optional[str] = Query(None, description="Search by employee name or code"),
+    work_mode: Optional[str] = Query(None, description="Filter by work mode: WFO, HYBRID"),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin)
+):
+    """Export monthly report as CSV for date range (month-wise records)"""
+    generator = ReportGenerator(db)
+    data = generator.get_monthly_report_export(from_month=from_month, to_month=to_month, search=search, work_mode=work_mode)
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Headers with month column for date range export
+    writer.writerow([
+        "Month",
+        "Emp Code",
+        "Emp Name",
+        "Work Mode",
+
+        "Expected WFO Days",
+        "Actual WFO Days",
+
+        "Expected WFH Days",
+        "Actual WFH Days",
+
+        "Days Below Required Hours",
+        "Avg Compliance %",
+        "Status"
+    ])
+
+    for row in data:
+        writer.writerow([
+            row["month"],
+            row["employee_code"],
+            row["employee_name"],
+            row["work_mode"],
+
+            row["expected_wfo_days"],
+            row["total_wfo_days"],
+
+            row["expected_wfh_days"],
+            row["total_wfh_days"],
+
+            row["days_below_required_hours"],
+            f'{row["avg_compliance_percentage"]:.2f}%',
+            row["compliance_status"]
+        ])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename=monthly_report_{from_month}_to_{to_month}.csv"
         }
     )
 
