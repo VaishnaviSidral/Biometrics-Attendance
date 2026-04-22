@@ -249,6 +249,20 @@ export const api = {
         downloadBlob(blob, filename);
     },
 
+    exportMonthlyReportRangeCSV: async (params = {}) => {
+        const searchParams = new URLSearchParams();
+    
+        if (params.from_month) searchParams.set('from_month', params.from_month);
+        if (params.to_month) searchParams.set('to_month', params.to_month);
+        if (params.search) searchParams.set('search', params.search);
+        if (params.work_mode) searchParams.set('work_mode', params.work_mode);
+    
+        const blob = await request(`/reports/monthly-report/export-range?${searchParams}`);
+    
+        const filename = `monthly_report_${params.from_month}_to_${params.to_month}.csv`;
+    
+        downloadBlob(blob, filename);
+    },
 
     exportMonthlyIndividual: async (employeeCode, month) => {
         const blob = await request(`/reports/monthly-report/export/${employeeCode}?month=${month}`);

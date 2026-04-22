@@ -19,7 +19,8 @@ export default function MonthlyReport({ workMode }) {
     const months = useMemo(() => getMonthNames(), []);
     const selectedYear = globalYear;
     const selectedMonth = globalMonth;
-
+    const [fromMonth, setFromMonth] = useState(month);
+    const [toMonth, setToMonth] = useState(month);
     const handleYearChange = (year) => {
         setGlobalYear(year);
     };
@@ -34,6 +35,11 @@ export default function MonthlyReport({ workMode }) {
             .then(setComplianceSettings)
             .catch(err => console.error('Error fetching settings:', err));
     }, []);
+
+    // useEffect(() => {
+    //     setFromMonth(month);
+    //     setToMonth(month);
+    // }, [month]);
 
     // Debounce search input
     useEffect(() => {
@@ -64,18 +70,18 @@ export default function MonthlyReport({ workMode }) {
     };
     const handleExportCSV = async () => {
         try {
-            if (!month) return;
-
-            // month = "2026-02"
-            const [year, m] = month.split("-");
-            const monthName = new Date(month + "-01").toLocaleDateString("en-US", { month: "long" }).toLowerCase();
-
-            const filename = `monthly_report_${monthName}_${year}.csv`;
-
-            await api.exportMonthlyReportCSV(
-                { month, work_mode: workMode },
-                filename
-            );
+            if (!fromMonth || !toMonth) return;
+    
+            const params = {
+                from_month: fromMonth,
+                to_month: toMonth,
+                search: debouncedSearch 
+            };
+    
+            if (workMode) params.work_mode = workMode;
+    
+            await api.exportMonthlyReportRangeCSV(params)
+    
         } catch (err) {
             console.error("Monthly export error:", err);
         }
@@ -190,6 +196,28 @@ export default function MonthlyReport({ workMode }) {
                             />
                         </div>
                     </div>
+
+                    {/* From Month */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">From</label>
+                        <input
+                            type="month"
+                            className="form-input"
+                            value={fromMonth}
+                            onChange={(e) => setFromMonth(e.target.value)}
+                        />
+                    </div>
+
+                    {/* To Month */}
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label className="form-label">To</label>
+                        <input
+                            type="month"
+                            className="form-input"
+                            value={toMonth}
+                            onChange={(e) => setToMonth(e.target.value)}
+                        />
+                    </div>
                     <button
                         className="btn btn-primary"
                         onClick={handleExportCSV}
@@ -206,7 +234,12 @@ export default function MonthlyReport({ workMode }) {
                         <Download size={18} />
                         Export CSV
                     </button>
-
+                    {/* Note */}
+                    <div style={{ gridColumn: "1 / -1" }}>
+                        <small style={{ color: "var(--color-text-muted)" }}>
+                            Note: From–To month range is used only for export. Table data reflects the selected month above.
+                        </small>
+                    </div>
                 </div>
             </div>
 
