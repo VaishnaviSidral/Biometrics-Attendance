@@ -348,7 +348,16 @@ async def get_employee_weekly_compliance(
         )
     week_wfo_days = sum(1 for d in daily_data if d['is_present'] and d['is_weekday'])
 
-    required_days = mode_config['required_days']
+    valid_working_days = 0
+    _cur = sel_monday
+    while _cur <= sel_sunday:
+        if _cur.weekday() < 5:
+            _ds = _cur.isoformat()
+            if _ds not in holidays_set and _ds not in leave_days_set:
+                valid_working_days += 1
+        _cur += timedelta(days=1)
+
+    required_days = min(mode_config['required_days'], valid_working_days)
     week_status = TimeCalculator.calculate_weekly_compliance(
         week_daily_statuses, week_present_days, required_days, is_wfh
     )
@@ -356,7 +365,8 @@ async def get_employee_weekly_compliance(
     if is_wfh:
         week_compliance = 100.0
     else:
-        expected_weekly_minutes = mode_config.get('expected_weekly_hours', 0) * 60
+        hours_pd = mode_config.get('hours_per_day', ds['expected_hours_per_day'])
+        expected_weekly_minutes = required_days * hours_pd * 60
         if expected_weekly_minutes > 0:
             week_compliance = min((week_total_minutes / expected_weekly_minutes) * 100, 100.0)
         else:
@@ -367,11 +377,47 @@ async def get_employee_weekly_compliance(
         WeeklySummary.employee_code == employee_code
     ).order_by(WeeklySummary.week_start.desc()).limit(5).all()
 
+    hist_holidays_set: set = set()
+    hist_leave_set: set = set()
+    if weekly_summaries and not is_wfh:
+        span_start = min(s.week_start for s in weekly_summaries)
+        span_end = max(s.week_end for s in weekly_summaries)
+        hist_hols = db.query(Holiday.date).filter(
+            Holiday.date >= span_start,
+            Holiday.date <= span_end
+        ).all()
+        hist_holidays_set = {
+            h.date.isoformat() if isinstance(h.date, date) else str(h.date)
+            for h in hist_hols
+        }
+        try:
+            hist_leave_raw = redmine_service.get_leave_days_for_period(
+                employee.email, span_start.isoformat(), span_end.isoformat()
+            )
+            hist_leave_set = {
+                d.isoformat() if isinstance(d, date) else str(d)
+                for d in hist_leave_raw
+            }
+        except Exception:
+            hist_leave_set = set()
+
+    def _valid_weekdays_between(ws: date, we: date) -> int:
+        k = 0
+        d = ws
+        while d <= we:
+            if d.weekday() < 5:
+                ds = d.isoformat()
+                if ds not in hist_holidays_set and ds not in hist_leave_set:
+                    k += 1
+            d += timedelta(days=1)
+        return k
+
     weeks_summary = []
     for s in weekly_summaries:
         if is_wfh:
             s_compliance = 100.0
             s_status = 'Compliance'
+            s_required_days = 0
         else:
             s_daily_records = db.query(DailyAttendance).filter(
                 and_(
@@ -408,10 +454,13 @@ async def get_employee_weekly_compliance(
                         s_daily_statuses.append(cs)
                 s_current += timedelta(days=1)
 
+            s_valid = _valid_weekdays_between(s.week_start, s.week_end)
+            s_required_days = min(mode_config['required_days'], s_valid)
             s_status = TimeCalculator.calculate_weekly_compliance(
-                s_daily_statuses, s_present_days, mode_config['required_days'], False
+                s_daily_statuses, s_present_days, s_required_days, False
             )
-            expected_weekly_minutes = mode_config.get('expected_weekly_hours', 0) * 60
+            hours_pd_hist = mode_config.get('hours_per_day', ds['expected_hours_per_day'])
+            expected_weekly_minutes = s_required_days * hours_pd_hist * 60
             if expected_weekly_minutes > 0:
                 s_compliance = min((s.total_office_minutes / expected_weekly_minutes) * 100, 100.0)
             else:
@@ -424,7 +473,7 @@ async def get_employee_weekly_compliance(
             'total_hours': format_minutes_to_hours(s.total_office_minutes),
             'total_minutes': s.total_office_minutes,
             'wfo_days': s.wfo_days,
-            'required_days': mode_config['required_days'],
+            'required_days': s_required_days,
             'compliance_percentage': round(s_compliance, 2),
             'status': s_status
         })
@@ -454,8 +503,10 @@ async def get_employee_weekly_compliance(
             'total_hours': format_minutes_to_hours(week_total_minutes),
             'total_minutes': week_total_minutes,
             'wfo_days': week_wfo_days,
-            'required_days': mode_config['required_days'],
-            'expected_hours': f"{mode_config['expected_weekly_hours']}h",
+            'required_days': required_days,
+            'expected_hours': format_minutes_to_hours(
+                required_days * mode_config.get('hours_per_day', ds['expected_hours_per_day']) * 60
+            ),
             'compliance_percentage': round(week_compliance, 2),
             'status': week_status,
             'daily': daily_data

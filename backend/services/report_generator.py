@@ -140,6 +140,21 @@ class ReportGenerator:
             return False
         return date_str in self._leave_cache.get(email, set())
 
+    def _count_valid_weekdays(
+        self, range_start: date, range_end: date, employee_email: Optional[str]
+    ) -> int:
+        """Mon–Fri days in range excluding holidays and this employee's approved leave."""
+        leave_set = self._leave_cache.get(employee_email or "", set())
+        n = 0
+        cur = range_start
+        while cur <= range_end:
+            if cur.weekday() < 5:
+                ds = cur.isoformat()
+                if not self._holidays_cache.get(ds) and ds not in leave_set:
+                    n += 1
+            cur += timedelta(days=1)
+        return n
+
     def _get_daily_compliance_fast(self, total_minutes: int, is_present: bool,
                                     is_wfh: bool, date_str: str,
                                     employee_email: str) -> str:
@@ -222,6 +237,8 @@ class ReportGenerator:
                 'compliance_percentage': 100.0,
                 'present_days': 0,
                 'daily_statuses': [],
+                'required_days': 0,
+                'expected_minutes': 0,
             }
 
         daily_records = self.db.query(DailyAttendance).filter(
@@ -236,50 +253,15 @@ class ReportGenerator:
 
         employee = self.db.query(Employee).filter(Employee.code == employee_code).first()
         employee_email = employee.email if employee else None
-        
-        daily_statuses = []
-        present_days = 0
-        total_minutes = 0
 
-        current = week_start
-        while current <= week_end:
-            if current.weekday() < 5:
-                record = daily_map.get(current)
-                if record:
-                    mins = record.total_office_minutes or 0
-                    total_minutes += mins
-                    is_present = mins > 0 or record.first_in is not None
-                    if is_present:
-                        present_days += 1
-                    if record.compliance_status:
-                        daily_statuses.append(record.compliance_status.value)
-                    else:
-                        cs = self._get_daily_compliance_status(
-                            mins, is_present, False, current.isoformat(), employee_email, self.db
-                        )
-                        daily_statuses.append(cs)
-                else:
-                    cs = self._get_daily_compliance_status(
-                        0, False, False, current.isoformat(), employee_email, self.db
-                    )
-                    daily_statuses.append(cs)
-            current += timedelta(days=1)
+        self._preload_holidays(week_start, week_end)
+        if employee_email:
+            self._preload_leaves(employee_email, week_start, week_end)
 
-        required_days = mode_config.get('required_days', 0)
-        status = TimeCalculator.calculate_weekly_compliance(
-            daily_statuses, present_days, required_days, is_wfh
+        return self._compute_weekly_compliance_fast(
+            employee_code, week_start, week_end, work_mode,
+            daily_map, employee_email
         )
-
-        expected_minutes = mode_config.get('expected_weekly_hours', 0) * 60
-        pct = self._get_compliance_pct_for_display(total_minutes, expected_minutes)
-
-        return {
-            'status': status,
-            'compliance_percentage': round(pct, 2),
-            'present_days': present_days,
-            'daily_statuses': daily_statuses,
-            'total_minutes': total_minutes,
-        }
 
     def _compute_weekly_compliance_fast(
         self, employee_code: str, week_start: date, week_end: date,
@@ -299,6 +281,8 @@ class ReportGenerator:
                 'compliance_percentage': 100.0,
                 'present_days': 0,
                 'daily_statuses': [],
+                'required_days': 0,
+                'expected_minutes': 0,
             }
 
         daily_statuses = []
@@ -306,15 +290,41 @@ class ReportGenerator:
         total_minutes = 0
 
         current = week_start
+        valid_working_days = 0
+
         while current <= week_end:
             if current.weekday() < 5:
+
+                ds = current.isoformat()
+                is_holiday = self._is_holiday_cached(ds)
+                is_leave = self._is_on_leave_cached(employee_email, ds)
+
+                print("DEBUG:", current, "Holiday:", is_holiday, "Leave:", is_leave)
+
+                # Skip holidays completely
+                if is_holiday:
+                    current += timedelta(days=1)
+                    continue
+
                 record = daily_map.get(current)
+
+                # Skip leave days also from expectation
+                if is_leave:
+                    daily_statuses.append("Leave")
+                    current += timedelta(days=1)
+                    continue
+
+                # Count only valid working days
+                valid_working_days += 1
+
                 if record:
                     mins = record.total_office_minutes or 0
                     total_minutes += mins
+
                     is_present = mins > 0 or record.first_in is not None
                     if is_present:
                         present_days += 1
+
                     if record.compliance_status:
                         daily_statuses.append(record.compliance_status.value)
                     else:
@@ -327,14 +337,19 @@ class ReportGenerator:
                         0, False, False, current.isoformat(), employee_email
                     )
                     daily_statuses.append(cs)
-            current += timedelta(days=1)
 
-        required_days = mode_config.get('required_days', 0)
+            current += timedelta(days=1)
+        required_days = min(
+            mode_config.get('required_days', 0),
+            valid_working_days  # NEW LOGIC
+        )
         status = TimeCalculator.calculate_weekly_compliance(
             daily_statuses, present_days, required_days, is_wfh
         )
 
-        expected_minutes = mode_config.get('expected_weekly_hours', 0) * 60
+        hours_per_day = mode_config.get('hours_per_day', 9)
+
+        expected_minutes = required_days * hours_per_day * 60
         pct = self._get_compliance_pct_for_display(total_minutes, expected_minutes)
 
         return {
@@ -343,6 +358,8 @@ class ReportGenerator:
             'present_days': present_days,
             'daily_statuses': daily_statuses,
             'total_minutes': total_minutes,
+            'required_days': required_days,
+            'expected_minutes': expected_minutes,
         }
 
     def get_dashboard_summary(self) -> Dict:
@@ -496,12 +513,17 @@ class ReportGenerator:
                 )
                 status_val = result['status']
                 compliance = result['compliance_percentage']
+                eff_required = result.get(
+                    'required_days', mode_config['required_days']
+                )
+                exp_minutes = result.get(
+                    'expected_minutes', mode_config['expected_weekly_hours'] * 60
+                )
             else:
                 status_val = 'Non-Compliance'
                 compliance = 0.0
-
-            required_days = mode_config['required_days']
-            expected_weekly_hours = mode_config['expected_weekly_hours']
+                eff_required = mode_config['required_days']
+                exp_minutes = mode_config['expected_weekly_hours'] * 60
 
             report = {
                 'employee_code': emp.code,
@@ -512,9 +534,9 @@ class ReportGenerator:
                 'total_office_hours': self._format_minutes(total_minutes),
                 'total_office_minutes': total_minutes,
                 'wfo_days': wfo_days,
-                'required_wfo_days': required_days,
-                'expected_hours': f"{expected_weekly_hours}h 0m",
-                'expected_minutes': expected_weekly_hours * 60,
+                'required_wfo_days': eff_required,
+                'expected_hours': self._format_minutes(exp_minutes),
+                'expected_minutes': exp_minutes,
                 'compliance_percentage': round(compliance, 2),
                 'status': status_val,
                 'week_start': summary.week_start.isoformat() if summary else None,
@@ -692,9 +714,9 @@ class ReportGenerator:
                 'week_end': summary.week_end.isoformat(),
                 'week_label': f"{summary.week_start.strftime('%d %b')} - {summary.week_end.strftime('%d %b %Y')}",
                 'total_hours': self._format_minutes(summary.total_office_minutes),
-                'total_minutes': summary.total_office_minutes,
-                'wfo_days': summary.wfo_days,
-                'required_wfo_days': mode_config['required_days'],
+                'total_minutes': result['total_minutes'],
+                'wfo_days': result['present_days'],
+                'required_wfo_days': result.get('required_days', mode_config['required_days']),
                 'compliance_percentage': result['compliance_percentage'],
                 'status': result['status']
             })
@@ -757,6 +779,12 @@ class ReportGenerator:
             'daily_records': daily_data,
             'weekly_summaries': weekly_data
         }
+   
+   
+   
+   
+   
+   
     def get_wfo_compliance_report(
         self,
         week_start: Optional[date] = None
@@ -818,6 +846,9 @@ class ReportGenerator:
             if is_compliant:
                 compliant_count += 1
 
+            exp_minutes = result.get(
+                'expected_minutes', mode_config['expected_weekly_hours'] * 60
+            )
             employees.append({
                 'employee_code': employee.code,
                 'employee_name': employee.name,
@@ -825,8 +856,8 @@ class ReportGenerator:
                 'wfo_days': summary.wfo_days,
                 'actual_hours': self._format_minutes(summary.total_office_minutes),
                 'actual_minutes': summary.total_office_minutes,
-                'expected_hours': self._format_minutes(mode_config['expected_weekly_hours'] * 60),
-                'expected_minutes': mode_config['expected_weekly_hours'] * 60,
+                'expected_hours': self._format_minutes(exp_minutes),
+                'expected_minutes': exp_minutes,
                 'compliance_percentage': compliance,
                 'status': status_val,
                 'is_compliant': is_compliant
@@ -1123,51 +1154,54 @@ class ReportGenerator:
                     if daily_minutes > 0 and daily_hours < compliance_hours:
                         days_below_required_hours += 1
 
+            valid_month_days = self._count_valid_weekdays(
+                start_date, end_date, emp.email
+            )
+
             if is_exempted:
                 compliance_percentage = 100.0
                 compliance_status = "Compliance"
                 required_days = 0
             else:
-                required_days = mode_config.get('required_days', 0)
+                policy_days = mode_config.get('required_days', 0)
                 emp_daily_map = all_daily_by_emp.get(emp.code, {})
 
+                required_days = min(policy_days, valid_month_days)
+
                 weekly_statuses = []
+                weekly_percentages = []
                 for wk_s, wk_e in month_weeks:
                     result = self._compute_weekly_compliance_fast(
                         emp.code, wk_s, wk_e, emp_work_mode,
                         emp_daily_map, emp.email
                     )
                     weekly_statuses.append(result['status'])
+                    weekly_percentages.append(result['compliance_percentage'])
 
                 compliance_status = TimeCalculator.calculate_monthly_compliance(weekly_statuses)
 
-                expected_monthly_minutes = (
-                    required_days * len(month_weeks) *
-                    mode_config.get('hours_per_day', compliance_hours) * 60
-                )
-
-                if expected_monthly_minutes > 0:
-                    compliance_percentage = min((total_office_minutes / expected_monthly_minutes) * 100, 100.0)
+                if weekly_percentages:
+                    compliance_percentage = sum(weekly_percentages) / len(weekly_percentages)
                 else:
                     compliance_percentage = 100.0
 
-            # ✅ NEW LOGIC (Expected vs Actual — SAFE ADDITION)
+            # NEW LOGIC (Expected vs Actual — SAFE ADDITION)
             weeks_count = len(month_weeks)
 
             if emp_work_mode == "WFO":
-                expected_wfo_days = working_days
+                expected_wfo_days = valid_month_days
                 expected_wfh_days = 0
 
             elif emp_work_mode == "HYBRID":
                 required_days_per_week = mode_config.get('required_days', 0)
-                expected_wfo_days = min(required_days_per_week * weeks_count, working_days)
-                expected_wfh_days = max(working_days - expected_wfo_days, 0)
+                expected_wfo_days = min(required_days_per_week * weeks_count, valid_month_days)
+                expected_wfh_days = max(valid_month_days - expected_wfo_days, 0)
 
             else:
                 expected_wfo_days = 0
-                expected_wfh_days = working_days
+                expected_wfh_days = valid_month_days
 
-            # ✅ FINAL OUTPUT
+            # FINAL OUTPUT
             final.append({
                 "employee_code": emp.code,
                 "employee_name": emp.name,
