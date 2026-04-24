@@ -72,6 +72,11 @@ def build_work_mode_config(
 # Default config (used as fallback only)
 DEFAULT_WORK_MODE_CONFIG = build_work_mode_config()
 
+# Weekdays that do not count toward policy required_days (holidays, leave, etc.)
+_STATUSES_EXCLUDED_FROM_REQUIRED_DAY_COUNT = frozenset({
+    "Leave", "Official Leave", "Holiday", "Weekend",
+})
+
 
 class TimeCalculator:
     """Calculate attendance times and compliance metrics"""
@@ -199,22 +204,23 @@ class TimeCalculator:
         is_wfh: bool = False
     ) -> str:
 
+        # WFH always compliant
         if is_wfh:
             return "Compliance"
+
+        # CRITICAL FIX 1: Full leave week
+        if required_days == 0:
+            return "Leave"
 
         # Remove non-working statuses
         valid_statuses = [
             s for s in daily_statuses
-            if s not in ["Leave", "Official Leave", "Holiday", "Weekend"]
+            if s not in ["Leave", "Official Leave", "Holiday", "Weekend", None]
         ]
 
+        # CRITICAL FIX 2: No valid working days but required > 0
         if not valid_statuses:
-            return "Compliance"
-
-        # When required_days is 0 (e.g. caller omitted it), derive status from all working days
-        # so weekly reflects daily: any Non → Non, any Mid → Mid, else Compliance.
-        if required_days <= 0:
-            return TimeCalculator.aggregate_compliance_statuses(valid_statuses)
+            return "Non-Compliance"
 
         compliance_days = valid_statuses.count("Compliance")
         mid_days = valid_statuses.count("Mid-Compliance")
@@ -223,22 +229,22 @@ class TimeCalculator:
         # Build best possible required days
         considered = []
 
-        # First take compliance days
+        # Take Compliance first
         take = min(compliance_days, required_days)
         considered += ["Compliance"] * take
         remaining = required_days - take
 
-        # Then take mid days
+        # Then Mid
         if remaining > 0:
             take = min(mid_days, remaining)
             considered += ["Mid-Compliance"] * take
             remaining -= take
 
-        # Then take non days
+        # Then Non
         if remaining > 0:
             considered += ["Non-Compliance"] * remaining
 
-        # Final weekly status
+        # Final status
         if "Non-Compliance" in considered:
             return "Non-Compliance"
 
@@ -436,6 +442,8 @@ class TimeCalculator:
             policy_required_days = mode_config.get('required_days', 0)
             hours_per_day = mode_config.get('hours_per_day', self.expected_hours_per_day)
 
+            valid_working_days = 0
+
             # Enumerate ALL weekdays in the range
             current = week_start
             while current <= week_end:
@@ -450,26 +458,35 @@ class TimeCalculator:
                             actual_presence_days += 1
 
                         if 'compliance_status' in summary and summary['compliance_status']:
-                            daily_statuses.append(summary['compliance_status'])
+                            day_status = summary['compliance_status']
+                            daily_statuses.append(day_status)
                         else:
-                            daily_status = self.compute_daily_compliance_status(
+                            day_status = self.compute_daily_compliance_status(
                                 minutes, is_present, is_wfh
                             )
-                            daily_statuses.append(daily_status)
+                            daily_statuses.append(day_status)
                     else:
                         # No record for this weekday → absent
                         if is_wfh:
-                            daily_statuses.append("Compliance")
+                            day_status = "Compliance"
+                            daily_statuses.append(day_status)
                         else:
-                            daily_statuses.append("Non-Compliance")
+                            day_status = "Non-Compliance"
+                            daily_statuses.append(day_status)
+                    if day_status not in _STATUSES_EXCLUDED_FROM_REQUIRED_DAY_COUNT:
+                        valid_working_days += 1
                 current += timedelta(days=1)
+
+            effective_required_days = (
+                0 if is_wfh else min(policy_required_days, valid_working_days)
+            )
 
             wfo_days = min(actual_presence_days, policy_required_days)
 
-            expected_minutes = policy_required_days * hours_per_day * 60
+            expected_minutes = effective_required_days * hours_per_day * 60
 
             compliance_status = self.calculate_weekly_compliance(
-                daily_statuses, actual_presence_days, policy_required_days, is_wfh
+                daily_statuses, actual_presence_days, effective_required_days, is_wfh
             )
 
             if is_wfh:

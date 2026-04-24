@@ -391,7 +391,7 @@ export default function EmployeeDashboard() {
                         <tr>
                             <th>WEEK</th>
                             <th>TOTAL HOURS</th>
-                            <th>WFO DAYS</th>
+                            <th>WFO DAYS/REQUIRED DAYS</th>
                             <th>COMPLIANCE</th>
                             <th>STATUS</th>
                         </tr>
