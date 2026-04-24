@@ -185,7 +185,7 @@ export default function IndividualReport() {
         },
         {
             key: 'wfo_days',
-            label: 'WFO Days',
+            label: 'WFO Days/Required_days',
             render: (value, row) => (
                 <span>
                     <span className="font-medium">{value}</span>
@@ -324,7 +324,7 @@ export default function IndividualReport() {
                 <SummaryCard
                     icon={Building2}
                     value={report?.summary?.total_wfo_days || 0}
-                    label="WFO Days"
+                    label="WFO Days/Required Days"
                     status="green"
                 />
                 <SummaryCard

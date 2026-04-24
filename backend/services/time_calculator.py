@@ -204,22 +204,23 @@ class TimeCalculator:
         is_wfh: bool = False
     ) -> str:
 
+        # WFH always compliant
         if is_wfh:
             return "Compliance"
+
+        # CRITICAL FIX 1: Full leave week
+        if required_days == 0:
+            return "Leave"
 
         # Remove non-working statuses
         valid_statuses = [
             s for s in daily_statuses
-            if s not in ["Leave", "Official Leave", "Holiday", "Weekend"]
+            if s not in ["Leave", "Official Leave", "Holiday", "Weekend", None]
         ]
 
+        # CRITICAL FIX 2: No valid working days but required > 0
         if not valid_statuses:
-            return "Compliance"
-
-        # When required_days is 0 (e.g. caller omitted it), derive status from all working days
-        # so weekly reflects daily: any Non → Non, any Mid → Mid, else Compliance.
-        if required_days <= 0:
-            return TimeCalculator.aggregate_compliance_statuses(valid_statuses)
+            return "Non-Compliance"
 
         compliance_days = valid_statuses.count("Compliance")
         mid_days = valid_statuses.count("Mid-Compliance")
@@ -228,22 +229,22 @@ class TimeCalculator:
         # Build best possible required days
         considered = []
 
-        # First take compliance days
+        # Take Compliance first
         take = min(compliance_days, required_days)
         considered += ["Compliance"] * take
         remaining = required_days - take
 
-        # Then take mid days
+        # Then Mid
         if remaining > 0:
             take = min(mid_days, remaining)
             considered += ["Mid-Compliance"] * take
             remaining -= take
 
-        # Then take non days
+        # Then Non
         if remaining > 0:
             considered += ["Non-Compliance"] * remaining
 
-        # Final weekly status
+        # Final status
         if "Non-Compliance" in considered:
             return "Non-Compliance"
 
